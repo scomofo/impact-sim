@@ -210,6 +210,74 @@ h2 {
   letter-spacing: 0.04em;
 }
 
+/* readout header with pin button */
+#readout-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+#readout-head h2 { margin-bottom: 10px; }
+#pin-btn { padding: 2px 8px; font-size: 10px; }
+
+/* comparison tray */
+#compare-tray {
+  position: fixed;
+  left: 14px;
+  bottom: 30px;
+  display: flex;
+  gap: 8px;
+  z-index: 12;
+  max-width: calc(100vw - 620px);
+  overflow-x: auto;
+}
+.cmp-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  padding: 8px 10px;
+  width: 158px;
+  flex-shrink: 0;
+  position: relative;
+  font-size: 11px;
+}
+.cmp-card .cmp-x {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 12px;
+}
+.cmp-card .cmp-x:hover { color: var(--accent); }
+.cmp-card h3 {
+  font-size: 11px;
+  color: #e4ebf5;
+  margin-bottom: 4px;
+  padding-right: 14px;
+  font-weight: 600;
+}
+.cmp-card .cmp-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--dim);
+}
+.cmp-card .cmp-row span:last-child {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.cmp-card .badge {
+  margin: 5px 0 0;
+  padding: 4px 6px;
+  font-size: 9.5px;
+}
+
 /* timeline scrubber */
 #timeline {
   position: fixed;
@@ -246,6 +314,7 @@ h2 {
 .tl-mark.impact { background: var(--accent); }
 .tl-mark.secondary { background: rgba(255, 200, 120, 0.55); }
 .tl-mark.antipode { background: #4dd2ff; }
+.tl-mark.moon { background: #cfd8e6; }
 #scrub-time {
   font-size: 11px;
   color: var(--dim);

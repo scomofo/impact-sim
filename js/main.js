@@ -256,6 +256,23 @@ const dustShell = makeHeatShell(R * 1.045);
 dustShell.material.uniforms.uColor.value.setHex(0x7d786c);
 planetGroup.add(dustShell);
 
+// Moon that accretes from the debris disk after moon-forming impacts.
+const moonMat = new THREE.MeshPhongMaterial({
+  color: 0xbcb8b2,
+  emissive: new THREE.Color(0xff5522), // newly accreted = still molten; cools over time
+  emissiveIntensity: 0,
+});
+texLoader.load(TEX_CDN + 'moon_1024.jpg', (t) => {
+  t.colorSpace = THREE.SRGBColorSpace;
+  moonMat.map = t;
+  moonMat.color.setHex(0xffffff);
+  moonMat.needsUpdate = true;
+});
+const moon = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), moonMat);
+moon.visible = false;
+scene.add(moon);
+const _moonPos = new THREE.Vector3();
+
 // --- simulation state -------------------------------------------------------
 const sim = {
   state: 'idle',       // idle | approach | impact
@@ -276,6 +293,9 @@ const sim = {
   dustTarget: 0,
   replaySnapshot: null, // {surf, disp, craterCount} captured at launch
   lastScale: 1,
+  heatFrontArc: 0,      // how far the ignition front has swept (radians)
+  heatFrontSpeed: 0,
+  moonForming: null,    // {at, growDur, finalR, orbitR, angle0, omega, ...}
   startWorld: new THREE.Vector3(),
   velDir: new THREE.Vector3(),
   tangent: new THREE.Vector3(),
@@ -318,7 +338,7 @@ function currentImpactWorld() {
   return planetGroup.localToWorld(sim.impactLocal.clone().multiplyScalar(R));
 }
 
-const RUN_DURATION = 40; // sim-seconds of scrubbable timeline per run
+const RUN_DURATION = 48; // sim-seconds of scrubbable timeline per run
 
 function launch(params) {
   // Clear any prior run but keep painted craters.
@@ -370,8 +390,14 @@ function clearRun() {
   ejecta.clear(); ring.clear(); chunks.clear(); trail.clear(); flash.clear(); shock.clear();
   sim.secondaries = [];
   sim.antipodeAt = null;
+  sim.moonForming = null;
+  moon.visible = false;
+  moon.scale.setScalar(0.001);
   heatShell.visible = false;
   heatShell.material.uniforms.uOpacity.value = 0;
+  heatShell.material.uniforms.uFrontArc.value = 0;
+  sim.heatFrontArc = 0;
+  sim.heatFrontSpeed = 0;
   dustShell.visible = false;
   dustShell.material.uniforms.uOpacity.value = 0;
   sim.dustTarget = 0;
@@ -470,7 +496,12 @@ function onContact() {
     }
 
     paintCrater(sim.impactLocal, (res.crater.Dfr / 2) / EARTH.radius);
-    if (res.severity.level >= 2) sim.emissiveHeat = Math.min(0.55, 0.18 * (res.severity.level - 1));
+    if (res.severity.level >= 2) {
+      sim.emissiveHeat = Math.min(0.55, 0.18 * (res.severity.level - 1));
+      // Firestorm front sweeps out from ground zero (~14 s to wrap).
+      heatShell.material.uniforms.uImpactDir.value.copy(sim.impactLocal);
+      sim.heatFrontSpeed = Math.PI / 14;
+    }
     if (res.severity.level >= 3) sim.dustTarget = 0.18 + 0.09 * (res.severity.level - 3);
     ui.setPhase('Impact! Crater forming');
     updateTimelineEvents(now);
@@ -500,7 +531,8 @@ function onContact() {
   });
   paintCrater(sim.impactLocal, Math.min(1.2, 0.35 + g.gamma * 2));
   sim.emissiveHeat = g.magmaOcean ? 1 : 0.6;
-  heatShell.visible = true;
+  heatShell.material.uniforms.uImpactDir.value.copy(sim.impactLocal);
+  sim.heatFrontSpeed = Math.PI / 7;   // mantle-melt front wraps in ~7 s
 
   const orbitNormal = new THREE.Vector3().crossVectors(sim.velDir, Nw).normalize();
   if (g.outcome === 'hit-and-run') {
@@ -524,6 +556,17 @@ function onContact() {
   } else {
     if (g.moonForming) {
       ring.trigger(Pw, orbitNormal);
+      // The disk coalesces into a moon whose size follows the disk mass.
+      sim.moonForming = {
+        at: now + 16,
+        growDur: 22,
+        finalR: 1.737 * Math.cbrt(Math.min(g.diskMoons, 2)),
+        orbitR: R * 3.2,
+        angle0: Math.random() * Math.PI * 2,
+        omega: (2 * Math.PI) / 50,
+        started: false,
+        done: false,
+      };
       ui.setPhase('Giant impact — debris disk forming (a moon is born)');
     } else {
       ui.setPhase(`Giant impact — ${g.outcome}`);
@@ -540,6 +583,9 @@ function updateTimelineEvents(contactTime) {
   }
   if (sim.antipodeAt !== null) {
     sim.timelineEvents.push({ t: rel(sim.antipodeAt), label: 'antipode' });
+  }
+  if (sim.moonForming) {
+    sim.timelineEvents.push({ t: rel(sim.moonForming.at), label: 'moon' });
   }
   ui.setTimeline(RUN_DURATION, sim.timelineEvents);
 }
@@ -610,10 +656,13 @@ const camDirector = {
       this.tmpLook.copy(currentImpactWorld());
     } else {
       const Pw = currentImpactWorld();
-      const wide = sim.result && (sim.result.regime === 'giant') ? 4.2 : 2.5;
+      // Pull back far enough to frame the new moon's orbit once it forms.
+      const moonWide = sim.moonForming?.started ? 8.5 : 4.2;
+      const wide = sim.result && (sim.result.regime === 'giant') ? moonWide : 2.5;
       const camDir = Pw.clone().normalize().addScaledVector(sim.tangent, 0.75).normalize();
       this.tmpPos.copy(camDir.multiplyScalar(R * wide));
       this.tmpLook.copy(Pw).multiplyScalar(sim.t > 8 ? 0 : 1); // drift to whole planet later
+      if (sim.moonForming?.started) this.tmpLook.lerp(moon.position, 0.3); // keep the moon in frame
     }
     camera.position.lerp(this.tmpPos, k);
     controls.target.lerp(this.tmpLook, k);
@@ -720,14 +769,20 @@ function advance(rawDt) {
     }
   } else if (sim.state === 'impact') {
     sim.t += dt;
-    // Planet heat glow ramp; big impacts also blast the cloud deck away.
+    // Ignition front sweeps outward from ground zero; the planet only glows
+    // uniformly once the front has wrapped the globe.
     if (sim.emissiveHeat > 0) {
+      sim.heatFrontArc = Math.min(Math.PI, sim.heatFrontArc + sim.heatFrontSpeed * dt);
+      const frac = sim.heatFrontArc / Math.PI;
       const ramp = Math.min(1, sim.t / 4);
       const lvl = sim.emissiveHeat * ramp;
-      planetMat.emissive.setRGB(lvl, lvl * 0.25, lvl * 0.05);
-      if (heatShell.visible) heatShell.material.uniforms.uOpacity.value = 0.5 * lvl;
+      const uni = lvl * frac ** 1.3;   // base-material glow follows the swept area
+      planetMat.emissive.setRGB(uni, uni * 0.25, uni * 0.05);
+      heatShell.material.uniforms.uFrontArc.value = sim.heatFrontArc;
+      heatShell.material.uniforms.uOpacity.value = 0.55 * lvl;
+      heatShell.visible = lvl > 0.02;
       if (sim.emissiveHeat > 0.3) {
-        clouds.material.opacity = Math.max(0, clouds.material.opacity - dt * 0.12);
+        clouds.material.opacity = Math.max(0, clouds.material.opacity - dt * 0.12 * (0.3 + frac));
       }
     }
     if (sim.planetScale < 1) clouds.visible = false;
@@ -789,6 +844,31 @@ function advance(rawDt) {
     sun.intensity = 2.6 * (1 - 1.4 * next);
   }
 
+  // Moon accretion: the disk drains into a growing moon on a slow orbit.
+  if (sim.moonForming && sim.effTime >= sim.moonForming.at) {
+    const m = sim.moonForming;
+    if (!m.started) {
+      m.started = true;
+      moon.visible = true;
+      ring.startAccretion(() => _moonPos);
+      ui.setPhase('The debris disk coalesces — a new moon grows');
+    }
+    const k = Math.min(1, (sim.effTime - m.at) / m.growDur);
+    const ease = k * k * (3 - 2 * k);
+    moon.scale.setScalar(Math.max(0.001, m.finalR * ease));
+    const ang = m.angle0 + (sim.effTime - m.at) * m.omega;
+    _moonPos.set(0, 0, 0)
+      .addScaledVector(ring.e1, Math.cos(ang) * m.orbitR)
+      .addScaledVector(ring.e2, Math.sin(ang) * m.orbitR);
+    moon.position.copy(_moonPos);
+    moon.rotation.y = ang;
+    moonMat.emissiveIntensity = 0.85 * Math.exp(-(sim.effTime - m.at) / 25) + 0.06;
+    if (k >= 1 && !m.done) {
+      m.done = true;
+      ui.setPhase('A new moon settles into orbit');
+    }
+  }
+
   flash.update(dt);
   shock.setTime(sim.effTime);
   ejecta.setTime(sim.effTime);
@@ -799,7 +879,7 @@ function advance(rawDt) {
 tick();
 
 // Debug/test hook: lets tooling step sim time without relying on rAF.
-window.__sim = { sim, advance, launch, resetPlanet, scrubTo };
+window.__sim = { sim, advance, launch, resetPlanet, scrubTo, moon, camera };
 
 function updatePixScale() {
   ejecta.setPixScale(window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)));

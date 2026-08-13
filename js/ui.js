@@ -274,6 +274,46 @@ export function initUI(handlers) {
   });
   $('play-btn').addEventListener('click', () => handlers.onPlayPause?.());
 
+  // Comparison tray: pin the currently displayed forecast/result.
+  const pinned = [];
+  function cmpHeadline(res) {
+    if (res.regime === 'airburst') return ['Outcome', `airburst @ ${fmtLen(res.burstAlt ?? 0)}`];
+    if (res.regime === 'crater') {
+      if (res.seafloorStopped) return ['Outcome', 'stopped by ocean'];
+      return ['Crater', fmtLen(res.crater.Dfr)];
+    }
+    return ['Outcome', res.giant.outcome];
+  }
+  function renderCompare() {
+    const tray = $('compare-tray');
+    tray.innerHTML = '';
+    pinned.forEach((res, idx) => {
+      const card = document.createElement('div');
+      card.className = 'cmp-card';
+      const [hl, hv] = cmpHeadline(res);
+      const sev = res.regime === 'giant'
+        ? { level: 5, label: `GIANT — ${res.giant.outcome}` } : res.severity;
+      card.innerHTML = `
+        <button class="cmp-x" title="Remove">✕</button>
+        <h3>${fmtLen(res.diameter)} · ${(res.velocity / 1000).toFixed(0)} km/s · ${res.angleDeg}°</h3>
+        <div class="cmp-row"><span>Energy</span><span>${sci(res.energyMt)} Mt</span></div>
+        <div class="cmp-row"><span>${hl}</span><span>${hv}</span></div>
+        <div class="cmp-row"><span>vs Chicxulub</span><span>${res.chicxulubs >= 0.01 ? '×' + num(res.chicxulubs, 2) : 'tiny'}</span></div>
+        <div class="badge sev-${sev.level}">${sev.label}</div>`;
+      card.querySelector('.cmp-x').addEventListener('click', () => {
+        pinned.splice(idx, 1);
+        renderCompare();
+      });
+      tray.appendChild(card);
+    });
+  }
+  $('pin-btn').addEventListener('click', () => {
+    if (!lastRes) return;
+    pinned.push(lastRes);
+    if (pinned.length > 4) pinned.shift();
+    renderCompare();
+  });
+
   let hintTimer = null;
   const defaultHint = $('hint').textContent;
 

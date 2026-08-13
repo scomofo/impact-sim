@@ -75,16 +75,26 @@ export function makeAtmosphere(radius) {
   return new THREE.Mesh(new THREE.SphereGeometry(radius * 1.03, 64, 48), mat);
 }
 
-// Additive fresnel shell used for the global-heat look after huge impacts.
+// Additive fresnel shell for the global-heat look. The glow SWEEPS outward
+// from uImpactDir: only regions the ignition front has passed (arc distance
+// < uFrontArc) burn. Default uFrontArc = PI behaves as a uniform veil (used
+// by the dust shell).
 export function makeHeatShell(radius) {
   const mat = new THREE.ShaderMaterial({
     transparent: true, blending: THREE.AdditiveBlending, side: THREE.FrontSide, depthWrite: false,
-    uniforms: { uColor: { value: new THREE.Color(0xff5a1a) }, uOpacity: { value: 0 } },
+    uniforms: {
+      uColor: { value: new THREE.Color(0xff5a1a) },
+      uOpacity: { value: 0 },
+      uImpactDir: { value: new THREE.Vector3(0, 0, 1) },
+      uFrontArc: { value: Math.PI },
+    },
     vertexShader: /* glsl */ `
       varying vec3 vNormal;
       varying vec3 vView;
+      varying vec3 vDir;
       void main() {
         vNormal = normalize(normalMatrix * normal);
+        vDir = normalize(position);
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         vView = normalize(-mv.xyz);
         gl_Position = projectionMatrix * mv;
@@ -92,12 +102,31 @@ export function makeHeatShell(radius) {
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
       uniform float uOpacity;
+      uniform vec3 uImpactDir;
+      uniform float uFrontArc;
       varying vec3 vNormal;
       varying vec3 vView;
+      varying vec3 vDir;
+      float hash(vec3 p) {
+        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+      }
+      float vnoise(vec3 p) {
+        vec3 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = hash(i), b = hash(i + vec3(1,0,0)), c = hash(i + vec3(0,1,0)), d = hash(i + vec3(1,1,0));
+        float e = hash(i + vec3(0,0,1)), g = hash(i + vec3(1,0,1)), h = hash(i + vec3(0,1,1)), k = hash(i + vec3(1,1,1));
+        return mix(mix(mix(a,b,f.x), mix(c,d,f.x), f.y), mix(mix(e,g,f.x), mix(h,k,f.x), f.y), f.z);
+      }
       void main() {
         if (uOpacity < 0.004) discard;
+        float ang = acos(clamp(dot(vDir, uImpactDir), -1.0, 1.0));
+        // Burned region: behind the front, brightest just behind the edge.
+        float swept = 1.0 - smoothstep(uFrontArc - 0.35, uFrontArc, ang);
+        if (swept < 0.004) discard;
+        float edge = 1.0 + 1.6 * exp(-pow((uFrontArc - ang) / 0.18, 2.0));
+        float mottle = 0.55 + 0.45 * vnoise(vDir * 26.0);
         float f = 0.35 + 0.65 * pow(1.0 - abs(dot(vNormal, vView)), 2.0);
-        gl_FragColor = vec4(uColor, f * uOpacity);
+        gl_FragColor = vec4(uColor * edge * mottle, f * uOpacity * swept);
       }`,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.005, 64, 48), mat);
@@ -413,7 +442,9 @@ export class DebrisRing {
     // Per-particle parameters, allocated once and re-randomized per trigger.
     this.data = Array.from({ length: count }, () => ({
       r: 0, phi: 0, omega: 0, y: 0, settle: 1, t: 0, start: new THREE.Vector3(),
+      dead: false, drainAt: Infinity,
     }));
+    this.accretion = null;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
@@ -429,6 +460,7 @@ export class DebrisRing {
   }
   trigger(origin, planeNormal) {
     const R = this.planetRadius;
+    this.accretion = null;
     this.n = planeNormal.clone().normalize();
     const u = new THREE.Vector3(1, 0, 0);
     if (Math.abs(this.n.dot(u)) > 0.9) u.set(0, 1, 0);
@@ -437,6 +469,8 @@ export class DebrisRing {
     const startPhi = Math.atan2(origin.dot(this.e2), origin.dot(this.e1));
     for (let i = 0; i < this.count; i++) {
       const d = this.data[i];
+      d.dead = false;
+      d.drainAt = Infinity;
       d.r = R * (1.7 + 1.6 * Math.random() ** 1.4);
       d.phi = startPhi + (Math.random() - 0.5) * 0.7;
       d.omega = 0.55 / Math.sqrt(d.r / R);
@@ -457,11 +491,23 @@ export class DebrisRing {
     this.active = true;
     this.points.visible = true;
   }
+  // Begin draining ring particles into a growing moon. getTarget() must return
+  // the moon's current world position (a caller-owned scratch vector).
+  startAccretion(getTarget) {
+    this.accretion = { t: 0, getTarget };
+    for (const d of this.data) d.drainAt = 4 + Math.random() * 18;
+  }
   update(dt) {
     if (!this.active) return;
     this.t += dt;
+    const acc = this.accretion;
+    if (acc) acc.t += dt;
+    const moonPos = acc ? acc.getTarget() : null;
+    let anyAlive = false;
     for (let i = 0; i < this.count; i++) {
       const d = this.data[i];
+      if (d.dead) continue;
+      anyAlive = true;
       d.t += dt;
       d.phi += d.omega * dt;
       const k = Math.min(1, d.t / d.settle);
@@ -474,12 +520,26 @@ export class DebrisRing {
         .addScaledVector(this.n, d.y * flat);
       _t2.copy(d.start).lerp(_t1, ease);
       const j = i * 3;
+      // Staggered drain: each particle spirals into the moon over ~1.5 s.
+      if (moonPos && acc.t > d.drainAt) {
+        const dk = Math.min(1, (acc.t - d.drainAt) / 1.5);
+        _t2.lerp(moonPos, dk * dk);
+        if (dk >= 1) {
+          d.dead = true;
+          this.pos[j] = 1e6; this.pos[j + 1] = 1e6; this.pos[j + 2] = 1e6;
+          continue;
+        }
+      }
       this.pos[j] = _t2.x; this.pos[j + 1] = _t2.y; this.pos[j + 2] = _t2.z;
       if (this.col[j] === 1 && this.t > 20 && Math.random() < 0.01) {
         const g = 0.45 + 0.2 * Math.random();
         this.col[j] = g; this.col[j + 1] = g * 0.9; this.col[j + 2] = g * 0.8;
         this.geo.attributes.color.needsUpdate = true;
       }
+    }
+    if (!anyAlive) {
+      this.active = false;
+      this.points.visible = false;
     }
     this.geo.attributes.position.needsUpdate = true;
   }
