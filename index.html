@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planetary Impact Simulator</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="scene"></div>
+
+  <header id="topbar">
+    <div id="title">PLANETARY IMPACT SIMULATOR</div>
+    <div id="phase-label">Standing by</div>
+    <div id="top-controls">
+      <label class="time-ctl">
+        <span>time</span>
+        <input type="range" id="time-slider" min="0" max="2" step="0.05" value="1">
+        <span id="time-val">1.00×</span>
+      </label>
+      <button id="cinematic-btn" class="btn small active" title="Camera follows the action">cinematic cam</button>
+      <label class="chk"><input type="checkbox" id="truescale-chk"> true scale</label>
+      <button id="reset-btn" class="btn small" title="Heal all craters">reset planet</button>
+    </div>
+  </header>
+
+  <aside id="control-panel" class="panel">
+    <h2>Impactor</h2>
+    <div id="presets"></div>
+    <div class="ctl">
+      <label for="dia-slider">Diameter <span id="dia-val" class="ctl-val"></span></label>
+      <input type="range" id="dia-slider" min="0" max="1000" step="1" value="620" aria-label="Impactor diameter">
+    </div>
+    <div class="ctl">
+      <label for="vel-slider">Velocity <span id="vel-val" class="ctl-val"></span></label>
+      <input type="range" id="vel-slider" min="5" max="72" step="0.5" value="20" aria-label="Impact velocity">
+    </div>
+    <div class="ctl">
+      <label for="ang-slider">Impact angle <span id="ang-val" class="ctl-val"></span></label>
+      <input type="range" id="ang-slider" min="5" max="90" step="1" value="45" aria-label="Impact angle">
+    </div>
+    <div class="ctl">
+      <label for="comp-select">Composition</label>
+      <select id="comp-select"></select>
+    </div>
+    <div class="ctl">
+      <label for="target-select">Target terrain</label>
+      <select id="target-select"></select>
+    </div>
+    <div class="ctl-note">click the planet to move ground zero</div>
+    <button id="launch-btn" class="btn launch">LAUNCH</button>
+    <div id="exag-note"></div>
+  </aside>
+
+  <aside id="readout-panel" class="panel">
+    <h2 id="readout-title">Impact forecast</h2>
+    <div id="readouts"></div>
+    <div id="observer-section">
+      <h2>You are standing…</h2>
+      <div class="ctl">
+        <label>Distance from ground zero <span id="obs-val" class="ctl-val"></span></label>
+        <input type="range" id="obs-slider" min="0" max="1000" step="1" value="627">
+      </div>
+      <div id="observer-readouts"></div>
+    </div>
+  </aside>
+
+  <div id="timeline" hidden>
+    <button id="play-btn" class="btn small" title="Play / pause">❚❚</button>
+    <div id="scrub-wrap">
+      <input type="range" id="scrub-slider" min="0" max="400" step="1" value="0" aria-label="Timeline position">
+      <div id="timeline-marks"></div>
+    </div>
+    <span id="scrub-time">0.0 s</span>
+  </div>
+
+  <div id="hint">drag to orbit · scroll to zoom · pick a preset or dial in your own apocalypse</div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
