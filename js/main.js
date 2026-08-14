@@ -421,6 +421,11 @@ function resetPlanet() {
   resetSurface();
   sim.state = 'idle';
   sim.result = null;
+  // Kill the previous run's scrub state — otherwise scrubbing after a reset
+  // resurrects it and un-resets the surface.
+  sim.launchParams = null;
+  sim.replaySnapshot = null;
+  ui.hideTimeline();
   ui.setPhase('Standing by');
 }
 
@@ -631,7 +636,11 @@ function scrubTo(tau) {
     dispTex.needsUpdate = true;
     paintedCraters.length = snap.craterCount;
   }
+  // launch() forces the cinematic camera; a replay shouldn't steal a free cam.
+  const prevCam = camDirector.mode;
   launch(sim.launchParams);
+  camDirector.mode = prevCam;
+  ui.setCamMode(prevCam);
   sim.timeScale = 0;
   fastForward(tau);
   ui.setTimeScale(0);
@@ -772,8 +781,10 @@ function advance(rawDt) {
     // Ignition front sweeps outward from ground zero; the planet only glows
     // uniformly once the front has wrapped the globe.
     if (sim.emissiveHeat > 0) {
-      sim.heatFrontArc = Math.min(Math.PI, sim.heatFrontArc + sim.heatFrontSpeed * dt);
-      const frac = sim.heatFrontArc / Math.PI;
+      // Overshoot by the shader's fade width so the sweep fully closes at the
+      // antipode instead of leaving a permanent cool hole.
+      sim.heatFrontArc = Math.min(Math.PI + 0.35, sim.heatFrontArc + sim.heatFrontSpeed * dt);
+      const frac = Math.min(1, sim.heatFrontArc / Math.PI);
       const ramp = Math.min(1, sim.t / 4);
       const lvl = sim.emissiveHeat * ramp;
       const uni = lvl * frac ** 1.3;   // base-material glow follows the swept area
@@ -802,6 +813,9 @@ function advance(rawDt) {
       impactor.position.lerp(currentImpactWorld(), Math.min(1, dt * 3));
       if (impactor.scale.x < 0.01) impactor.visible = false;
     }
+    // Run complete: back to idle so click-to-move-ground-zero works again.
+    // Scrubbing still works — scrubTo gates on launchParams, not state.
+    if (sim.effTime - sim.runT0 >= RUN_DURATION) sim.state = 'idle';
   }
 
   // Scheduled events: fallback-debris secondaries and antipodal convergence.

@@ -138,11 +138,19 @@ export function burnRadius(E, energyMt, vSurface) {
   if (vSurface < 15000) return null;
   const eta = 3e-3;
   const phiBurn = 0.42e6 * energyMt ** (1 / 6);
-  const r = Math.sqrt((eta * E) / (2 * Math.PI * phiBurn));
-  // No thermal exposure once the whole fireball sits below the horizon (Eq. 36-37).
+  const r = Math.sqrt((eta * E) / (2 * Math.PI * phiBurn)); // f = 1 closed form
   const Rf = 0.002 * Math.cbrt(E);
   const rHorizon = EARTH.radius * Math.acos(clamp(1 - Rf / EARTH.radius, -1, 1));
-  return Math.min(r, rHorizon);
+  // Partial fireball visibility (Eq. 36) pulls the true burn ring well inside
+  // the f = 1 solution; bisect the exact exposure between the brackets.
+  // Exposure is monotonically decreasing on (0, rHorizon), so the root is unique.
+  let lo = 1, hi = Math.min(r, rHorizon);
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (thermalAtDistance(E, mid, vSurface).exposure >= phiBurn) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,27 +235,26 @@ export function seismicAtDistance(M, r) {
 // Ejecta blanket at distance r from crater center (Eq. 47, 50-52).
 export function ejectaAtDistance(Dtc, DfrHalf, energyMt, fireballR, r) {
   if (r <= DfrHalf) return null;                                // inside the crater
-  if (energyMt < 200 && fireballR && r > fireballR) {
+  // Below 200 Mt the atmosphere stifles the deposit beyond the fireball length
+  // scale (spec Section 7) — unconditional, not gated on a visible fireball.
+  if (energyMt < 200 && r > fireballR) {
     return { thickness: 0, note: 'ejecta stifled by the atmosphere' };
   }
   const thickness = Dtc ** 4 / (112 * r ** 3);
-  // Ejection velocity for this range (45° launch, Eq. 52) and flight time.
+  // Ejection velocity for this range (45° launch, Eq. 52) and the exact Kepler
+  // time of flight — verified stable and exact at all ranges, so no flat-Earth
+  // shortcut (that limit is off by up to 22% near 2,000 km).
   const t = Math.tan(r / (2 * EARTH.radius));
   const ve = Math.sqrt((2 * EARTH.g * EARTH.radius * t) / (1 + t));
-  let arrival;
-  if (r < 2e6) {
-    arrival = (Math.SQRT2 * ve) / EARTH.g;                      // flat-Earth limit
-  } else {
-    const x = (ve * ve) / (EARTH.g * EARTH.radius);
-    const e2 = 0.5 * ((x - 1) ** 2 + 1), e = Math.sqrt(e2);
-    const a = (ve * ve) / (2 * EARTH.g * (1 - e2));
-    const mu = EARTH.g * EARTH.radius ** 2;
-    const cosThL = clamp(((a * (1 - e2)) / EARTH.radius - 1) / e, -1, 1);
-    const thL = Math.acos(cosThL);
-    const EL = 2 * Math.atan(Math.sqrt((1 - e) / (1 + e)) * Math.tan(thL / 2));
-    const tL = (EL - e * Math.sin(EL)) * Math.sqrt(a ** 3 / mu);
-    arrival = 2 * Math.PI * Math.sqrt(a ** 3 / mu) - 2 * tL;
-  }
+  const x = (ve * ve) / (EARTH.g * EARTH.radius);
+  const e2 = 0.5 * ((x - 1) ** 2 + 1), e = Math.sqrt(e2);
+  const a = (ve * ve) / (2 * EARTH.g * (1 - e2));
+  const mu = EARTH.g * EARTH.radius ** 2;
+  const cosThL = clamp(((a * (1 - e2)) / EARTH.radius - 1) / e, -1, 1);
+  const thL = Math.acos(cosThL);
+  const EL = 2 * Math.atan(Math.sqrt((1 - e) / (1 + e)) * Math.tan(thL / 2));
+  const tL = (EL - e * Math.sin(EL)) * Math.sqrt(a ** 3 / mu);
+  const arrival = 2 * Math.PI * Math.sqrt(a ** 3 / mu) - 2 * tL;
   if (arrival > 3600) return { thickness: 0, note: 'only fine condensed-vapor fallout' };
   return { thickness, arrival, ve };
 }
@@ -274,9 +281,15 @@ export function observerReport(res, r) {
   return {
     insideFireball,
     thermal,
-    blast: { p, wind: peakWindSpeed(p), damage: blastDamage(p), arrival: r / 330 },
+    blast: {
+      p, wind: peakWindSpeed(p), damage: blastDamage(p), arrival: r / 330,
+      // The 1-kt blast fit overestimates 2-5x above ~1e4 Mt (paper caveat).
+      unreliable: res.energySurf > 1e4 * MT_TNT,
+    },
     seismic: seismicAtDistance(res.seismic, r),
-    ejecta: ejectaAtDistance(c.Dtc, c.Dfr / 2, res.energyMt, thermal?.Rf, r),
+    // Stifling gate uses surface energy and the ungated fireball length scale.
+    ejecta: ejectaAtDistance(c.Dtc, c.Dfr / 2, res.energySurf / MT_TNT,
+      0.002 * Math.cbrt(res.energySurf), r),
   };
 }
 

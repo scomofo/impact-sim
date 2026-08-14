@@ -148,7 +148,7 @@ function renderObserver(res, r) {
   if (o.blast) {
     const kpa = o.blast.p / 1000;
     rows.push(row('Air blast', `${kpa >= 100 ? kpa.toFixed(0) : kpa.toPrecision(2)} kPa · wind ${(o.blast.wind * 3.6).toFixed(0)} km/h`));
-    rows.push(row('', `${o.blast.damage ?? 'rattles, minor damage'}${o.blast.unreliable ? ' (high-airburst estimate, rough)' : ''} · arrives ${fmtTime(o.blast.arrival)}`, 'sub'));
+    rows.push(row('', `${o.blast.damage ?? 'rattles, minor damage'}${o.blast.unreliable ? ' (rough — beyond the blast fit’s range)' : ''} · arrives ${fmtTime(o.blast.arrival)}`, 'sub'));
   }
   if (o.seismic && o.seismic.Meff > 0) {
     rows.push(row('Ground shaking', `feels like M ${o.seismic.Meff.toFixed(1)}`));
@@ -331,6 +331,7 @@ export function initUI(handlers) {
     setCamMode(mode) {
       $('cinematic-btn').classList.toggle('active', mode === 'auto');
     },
+    hideTimeline() { $('timeline').hidden = true; },
     setTimeline(duration, events) {
       scrubDuration = duration;
       $('timeline').hidden = false;

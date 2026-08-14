@@ -86,7 +86,8 @@ export function makeHeatShell(radius) {
       uColor: { value: new THREE.Color(0xff5a1a) },
       uOpacity: { value: 0 },
       uImpactDir: { value: new THREE.Vector3(0, 0, 1) },
-      uFrontArc: { value: Math.PI },
+      // PI + fade width = truly uniform (the dust shell relies on this default).
+      uFrontArc: { value: Math.PI + 0.35 },
     },
     vertexShader: /* glsl */ `
       varying vec3 vNormal;
