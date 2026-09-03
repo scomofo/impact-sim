@@ -1,5 +1,6 @@
 // ui.js — control panel, presets, and physics readouts. No framework.
-import { COMPOSITIONS, PRESETS, TARGETS, observerReport } from './physics.js';
+import { COMPOSITIONS, TARGETS, observerReport } from './physics.js';
+import { CATALOG, CITIES, ERA_LABELS, ERA_ORDER, eventById } from './catalog.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -165,6 +166,11 @@ function renderObserver(res, r) {
       rows.push(row('Ejecta', 'a dusting at most'));
     }
   }
+  if (o.tsunami && o.tsunami.height > 0.05) {
+    const h = o.tsunami.height;
+    rows.push(row('Tsunami', h >= 1 ? `${num(h, 1)} m wave` : `${(h * 100).toFixed(0)} cm wave`));
+    rows.push(row('', `shallow-water estimate · arrives ${fmtTime(o.tsunami.arrival)}`, 'sub'));
+  }
   return rows.join('');
 }
 
@@ -203,19 +209,76 @@ export function initUI(handlers) {
   obsSlider.addEventListener('input', refreshObserver);
 
   const presetsEl = $('presets');
-  for (const p of PRESETS) {
+  let selectedId = null;
+  const cityBar = $('city-bar');
+  const eventNote = $('event-note');
+
+  function setEventNote(p) {
+    if (!p) { eventNote.hidden = true; eventNote.innerHTML = ''; return; }
+    const crater = p.craterKm != null
+      ? ` · measured crater ${p.craterKm < 1 ? (p.craterKm * 1000).toFixed(0) + ' m' : p.craterKm + ' km'}`
+      : '';
+    eventNote.hidden = false;
+    eventNote.innerHTML = `<strong>${p.name}</strong> · ${p.when}<br>${p.where}${crater}<br>${p.blurb}`;
+  }
+
+  function showCities(show) {
+    cityBar.hidden = !show;
+    cityBar.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
+  }
+
+  function applyEvent(p, { city } = {}) {
+    selectedId = p.id;
+    presetsEl.querySelectorAll('.chip[data-id]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.id === p.id);
+    });
+    diaSlider.value = sliderFromDia(p.diameter);
+    velSlider.value = p.velocity / 1000;
+    angSlider.value = p.angleDeg;
+    compSel.value = p.comp;
+    if (p.target && TARGETS[p.target]) targetSel.value = p.target;
+    setEventNote(p);
+    showCities(!!p.pickCity);
+    if (p.lat != null && p.lon != null) handlers.onGroundZero?.(p.lat, p.lon);
+    if (city) handlers.onGroundZero?.(city.lat, city.lon);
+    onChange();
+    $('launch-btn').classList.add('pulse');
+    const url = new URL(window.location.href);
+    url.searchParams.set('p', p.id);
+    history.replaceState(null, '', url);
+  }
+
+  for (const era of ERA_ORDER) {
+    const group = CATALOG.filter((e) => e.era === era);
+    if (!group.length) continue;
+    const label = document.createElement('div');
+    label.className = 'era-label';
+    label.textContent = ERA_LABELS[era];
+    presetsEl.appendChild(label);
+    const row = document.createElement('div');
+    row.className = 'era-row';
+    for (const p of group) {
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.dataset.id = p.id;
+      b.textContent = p.name.replace(' (Moon-forming)', '');
+      b.title = `${p.when} · ${p.where}`;
+      b.addEventListener('click', () => applyEvent(p));
+      row.appendChild(b);
+    }
+    presetsEl.appendChild(row);
+  }
+
+  for (const city of CITIES) {
     const b = document.createElement('button');
     b.className = 'chip';
-    b.textContent = p.name;
+    b.textContent = city.name;
     b.addEventListener('click', () => {
-      diaSlider.value = sliderFromDia(p.diameter);
-      velSlider.value = p.velocity / 1000;
-      angSlider.value = p.angleDeg;
-      compSel.value = p.comp;
-      onChange();
-      $('launch-btn').classList.add('pulse');
+      cityBar.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
+      b.classList.add('on');
+      handlers.onGroundZero?.(city.lat, city.lon);
     });
-    presetsEl.appendChild(b);
+    cityBar.appendChild(b);
   }
 
   function params() {
@@ -380,7 +443,12 @@ export function initUI(handlers) {
 
   // Deferred so the caller's reference to this ui object exists before the
   // first onChange round-trips back into it.
-  queueMicrotask(onChange);
+  queueMicrotask(() => {
+    onChange();
+    const wanted = new URLSearchParams(window.location.search).get('p');
+    const ev = wanted && eventById(wanted);
+    if (ev) applyEvent(ev);
+  });
   ui.setPhase('Standing by');
   ui.setCamMode('auto');
   return ui;

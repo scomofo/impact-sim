@@ -173,12 +173,13 @@ export class Flash {
 }
 
 // ---------------------------------------------------------------------------
-// ShockWaves: up to three simultaneous wave fronts hugging the planet — a
-// fireball flash-front, a fast seismic ring, and a slower air-blast ring.
-// The shell shader draws each as a sharp leading edge with a long turbulent
-// tail. Everything is a pure function of the sim clock, so pause/scrub work.
+// ShockWaves: up to four simultaneous wave fronts hugging the planet — a
+// fireball flash-front, a fast seismic ring, a slower air-blast ring, and
+// (for ocean hits) a tsunami front. The shell shader draws each as a sharp
+// leading edge with a long turbulent tail. Everything is a pure function of
+// the sim clock, so pause/scrub work.
 // ---------------------------------------------------------------------------
-const MAX_FRONTS = 3;
+const MAX_FRONTS = 4;
 
 export class ShockWaves {
   constructor(parent, planetRadius) {
@@ -187,9 +188,14 @@ export class ShockWaves {
       uniforms: {
         uImpactDir: { value: new THREE.Vector3(0, 0, 1) },
         // per front: x = arc radius, y = width, z = opacity, w = tail length mult
-        uFronts: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
+        uFronts: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
         uColors: {
-          value: [new THREE.Color(0xfff0c8), new THREE.Color(0x9fc8ff), new THREE.Color(0xff9440)],
+          value: [
+            new THREE.Color(0xfff0c8),
+            new THREE.Color(0x9fc8ff),
+            new THREE.Color(0xff9440),
+            new THREE.Color(0x4ec8c8),
+          ],
         },
       },
       vertexShader: /* glsl */ `
@@ -237,7 +243,7 @@ export class ShockWaves {
     this.t0 = -1;
     parent.add(this.mesh);
   }
-  // fronts: array of up to 3 descriptors; t0 = sim time of contact.
+  // fronts: array of up to 4 descriptors; t0 = sim time of contact.
   trigger(impactDirLocal, fronts, t0) {
     this.mat.uniforms.uImpactDir.value.copy(impactDirLocal).normalize();
     this.fronts = fronts.slice(0, MAX_FRONTS);

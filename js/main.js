@@ -14,6 +14,17 @@ const R = EARTH.radius / UNIT; // planet radius in scene units (6.371)
 const MIN_VISUAL = 0.03;       // minimum impactor visual radius (scene units)
 const APPROACH_TIME = 5.5;     // seconds of cinematic approach
 
+// Planet-local: +Y north pole, +X Greenwich, +Z 90°E.
+function latLonToDir(lat, lon) {
+  const la = (lat * Math.PI) / 180;
+  const lo = (lon * Math.PI) / 180;
+  return new THREE.Vector3(
+    Math.cos(la) * Math.cos(lo),
+    Math.sin(la),
+    Math.cos(la) * Math.sin(lo),
+  ).normalize();
+}
+
 // --- renderer / scene -------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
@@ -459,11 +470,24 @@ function onContact() {
     const burnArc = THREE.MathUtils.clamp(reach / EARTH.radius, 0.04, Math.PI);
     const fireArc = THREE.MathUtils.clamp((res.fireball ?? res.crater.Dfr) / EARTH.radius, 0.015, Math.PI);
     const quakeArc = THREE.MathUtils.clamp(burnArc * (2 + res.severity.level), 0.12, Math.PI);
-    shock.trigger(sim.impactLocal, [
+    const fronts = [
       { speed: fireArc / 1.1, maxArc: fireArc, width: Math.max(0.012, fireArc * 0.3), peak: 1.0, tail: 1.2 },
       { delay: 0.25, speed: quakeArc / 7, maxArc: quakeArc, width: 0.03 + 0.05 * (quakeArc / Math.PI), peak: 0.35, tail: 3 },
       { delay: 0.4, speed: burnArc / 14, maxArc: burnArc, width: Math.max(0.02, burnArc * 0.1), peak: 0.8, tail: 2.2 },
-    ], now);
+    ];
+    if (res.tsunami && res.waterDepth) {
+      const c = Math.sqrt(EARTH.g * res.waterDepth); // shallow-water m/s
+      const tsunArc = Math.min(Math.PI, 0.55 + Math.log10(Math.max(res.waterCrater / 1000, 1)) * 0.18);
+      fronts.push({
+        delay: 0.7,
+        speed: (c / EARTH.radius) * 80, // cinematic: real speed is hours
+        maxArc: tsunArc,
+        width: 0.04,
+        peak: 0.55,
+        tail: 4,
+      });
+    }
+    shock.trigger(sim.impactLocal, fronts, now);
 
     // Ejecta curtain with physically-scaled launch speeds: v ~ sqrt(g * Rc),
     // fastest streaks capped at a fraction of the impact speed.
@@ -711,6 +735,10 @@ const ui = initUI({
   },
   onCinematic() { camDirector.mode = 'auto'; ui.setCamMode('auto'); },
   onObserver(r) { sim.observerR = r; updateMarkers(); },
+  onGroundZero(lat, lon) {
+    sim.impactLocal.copy(latLonToDir(lat, lon));
+    updateMarkers();
+  },
 });
 updateMarkers();
 

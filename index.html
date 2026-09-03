@@ -36,6 +36,10 @@
   <aside id="control-panel" class="panel">
     <h2>Impactor</h2>
     <div id="presets"></div>
+    <div id="event-note" hidden></div>
+    <div id="city-bar" hidden>
+      <div class="era-label">Drop it on</div>
+    </div>
     <div class="ctl">
       <label for="dia-slider">Diameter <span id="dia-val" class="ctl-val"></span></label>
       <input type="range" id="dia-slider" min="0" max="1000" step="1" value="620" aria-label="Impactor diameter">
@@ -88,7 +92,7 @@
     <span id="scrub-time">0.0 s</span>
   </div>
 
-  <div id="hint">drag to orbit · scroll to zoom · pick a preset or dial in your own apocalypse</div>
+  <div id="hint">drag to orbit · scroll to zoom · pick an impact from the catalog, or dial in your own</div>
 
   <script type="module" src="js/main.js"></script>
 </body>
