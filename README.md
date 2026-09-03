@@ -18,11 +18,21 @@ npx http-server . -p 8742
 
 Then open http://localhost:8742. Textures and three.js load from CDN — first load needs a network connection.
 
+Share a catalog event with `?p=eltanin` (or `ries`, `apophis`, `theia`, …).
+
 ## Things to try
 
-- Pick a preset (Chelyabinsk → Chicxulub → Theia) and press **LAUNCH**
-- Click the planet to move ground zero; choose **deep ocean** as the target for tsunamis
-- Drag the **observer distance** slider — "You are standing…" tells you what the blast, heat, shaking, and ejecta do at that range, with arrival times
+A suggested tour through the catalog:
+
+1. **Eltanin** — deep Pacific, no hole. Watch the teal tsunami front and the observer tsunami estimate.
+2. **Ries** — Nördlingen is built from the suevite ejecta. Ground zero snaps to Bavaria.
+3. **Apophis** — not an impact in 2029. Pick a city (New York, Tokyo, …) and drop the ~370 m NEO.
+4. **Theia** — graze-and-merge, magma ocean, debris disk that becomes the Moon.
+
+Also:
+
+- Click the planet to move ground zero; choose **continental shelf** or **deep ocean** as the target for tsunamis
+- Drag the **observer distance** slider — "You are standing…" tells you what the blast, heat, shaking, ejecta, and tsunami do at that range, with arrival times
 - Scrub the **timeline** backward and forward through an impact
 - **Hit-and-run**: a Mars-size body that grazes Earth and escapes, mangled
 - Crank a Mars-size impactor to 72 km/s, head-on, and see what it actually takes to shatter a planet (spoiler: 2× escape velocity is nowhere near enough)
@@ -34,8 +44,9 @@ No build step — vanilla ES modules, three.js via CDN importmap.
 | File | Role |
 | --- | --- |
 | `js/physics.js` | Pure SI physics, no rendering imports — runs in Node for validation |
+| `js/catalog.js` | Documented Earth impacts + what-if NEOs, grouped by era |
 | `js/effects.js` | GPU ejecta (stateless ballistics in the vertex shader), multi-front shockwaves, debris ring, planet chunks |
 | `js/main.js` | Scene, impact sequence state machine, camera director, timeline scrubbing |
-| `js/ui.js` | Control panel, presets, readouts, observer panel |
+| `js/ui.js` | Control panel, catalog, readouts, observer panel |
 
 Physics readouts are exact SI; the animation runs on a labeled cinematic time-lapse so planetary-scale ballistics read at human speed.

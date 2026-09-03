@@ -32,6 +32,7 @@ export const COMPOSITIONS = {
 export const TARGETS = {
   sedimentary: { label: 'Sedimentary rock', rho: 2500 },
   crystalline: { label: 'Crystalline rock', rho: 2750 },
+  shelf: { label: 'Continental shelf (150 m)', rho: 2500, waterDepth: 150 },
   ocean: { label: 'Deep ocean (3.8 km)', rho: 2700, waterDepth: 3800 },
 };
 
@@ -248,6 +249,9 @@ export function ejectaAtDistance(Dtc, DfrHalf, energyMt, fireballR, r) {
   const ve = Math.sqrt((2 * EARTH.g * EARTH.radius * t) / (1 + t));
   const x = (ve * ve) / (EARTH.g * EARTH.radius);
   const e2 = 0.5 * ((x - 1) ** 2 + 1), e = Math.sqrt(e2);
+  if (e2 >= 1 || !Number.isFinite(e2) || !Number.isFinite(e) || e === 0) {
+    return { thickness: 0, note: 'ejecta on escape trajectories — no blanket' };
+  }
   const a = (ve * ve) / (2 * EARTH.g * (1 - e2));
   const mu = EARTH.g * EARTH.radius ** 2;
   const cosThL = clamp(((a * (1 - e2)) / EARTH.radius - 1) / e, -1, 1);
@@ -257,6 +261,17 @@ export function ejectaAtDistance(Dtc, DfrHalf, energyMt, fireballR, r) {
   const arrival = 2 * Math.PI * Math.sqrt(a ** 3 / mu) - 2 * tL;
   if (arrival > 3600) return { thickness: 0, note: 'only fine condensed-vapor fallout' };
   return { thickness, arrival, ve };
+}
+
+// Deep-water tsunami amplitude at range r (m). Amplitude at the cavity wall
+// is capped by water depth; then 1/sqrt(r) cylindrical spreading. Speed is
+// shallow-water c = sqrt(g h). Order-of-magnitude, not a full hydrocode.
+export function tsunamiAtDistance(waterCrater, waterDepth, r) {
+  if (!(waterCrater > 0) || !(waterDepth > 0)) return null;
+  const amp0 = Math.min(waterDepth, 0.14 * waterCrater);
+  const height = amp0 * Math.sqrt(Math.max(waterCrater, 1) / (2 * Math.max(r, 1)));
+  const c = Math.sqrt(EARTH.g * waterDepth);
+  return { height, arrival: r / c };
 }
 
 // Everything an observer at distance r experiences, with arrival times.
@@ -278,7 +293,7 @@ export function observerReport(res, r) {
   const thermal = thermalAtDistance(res.energySurf, r, res.vSurface);
   const insideFireball = thermal && !thermal.belowHorizon && r < thermal.Rf;
   const p = peakOverpressure(res.energySurf, r, 0);
-  return {
+  const report = {
     insideFireball,
     thermal,
     blast: {
@@ -291,6 +306,10 @@ export function observerReport(res, r) {
     ejecta: ejectaAtDistance(c.Dtc, c.Dfr / 2, res.energySurf / MT_TNT,
       0.002 * Math.cbrt(res.energySurf), r),
   };
+  if (res.tsunami && res.waterCrater && res.waterDepth) {
+    report.tsunami = tsunamiAtDistance(res.waterCrater, res.waterDepth, r);
+  }
+  return report;
 }
 
 // Severity bands per Chapman & Morrison 1994 / Toon et al. 1997 (Mt TNT).
@@ -480,11 +499,11 @@ export function computeImpact({ diameter, density, velocity, angleDeg, target = 
 
 // Reference events (CM&M validation set + giant-impact anchors).
 export const PRESETS = [
-  { name: 'Chelyabinsk', diameter: 20, comp: 'rock', velocity: 19000, angleDeg: 18 },
-  { name: 'Tunguska', diameter: 55, comp: 'rock', velocity: 15000, angleDeg: 35 },
-  { name: 'Barringer', diameter: 50, comp: 'iron', velocity: 17000, angleDeg: 45 },
-  { name: 'Chicxulub', diameter: 12000, comp: 'rock', velocity: 20000, angleDeg: 60 },
-  { name: 'Vredefort', diameter: 15000, comp: 'rock', velocity: 20000, angleDeg: 45 },
+  { name: 'Chelyabinsk', diameter: 20, comp: 'rock', velocity: 19000, angleDeg: 18, lat: 54.959, lon: 60.317 },
+  { name: 'Tunguska', diameter: 55, comp: 'rock', velocity: 15000, angleDeg: 35, lat: 60.886, lon: 101.894 },
+  { name: 'Barringer', diameter: 50, comp: 'iron', velocity: 17000, angleDeg: 45, lat: 35.027, lon: -111.023 },
+  { name: 'Chicxulub', diameter: 12000, comp: 'rock', velocity: 20000, angleDeg: 60, lat: 21.3, lon: -89.5, target: 'shelf' },
+  { name: 'Vredefort', diameter: 15000, comp: 'rock', velocity: 20000, angleDeg: 45, lat: -26.86, lon: 27.47 },
   { name: 'Ceres-size', diameter: 940000, comp: 'rock', velocity: 15000, angleDeg: 45 },
   { name: 'Moon-size', diameter: 3474000, comp: 'rock', velocity: 12000, angleDeg: 45 },
   // 7420 km at 3000 kg/m^3 = 6.42e23 kg = the canonical Theia (Mars) mass.
