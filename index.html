@@ -89,10 +89,13 @@
     <details id="model-details">
       <summary>Model assumptions &amp; limits</summary>
       <div id="model-notes"></div>
+      <p><a href="benchmarks.html" target="_blank" rel="noopener">Explore model benchmarks ↗</a></p>
     </details>
     <details id="sensitivity-details">
-      <summary>Diameter sensitivity ±10%</summary>
-      <p class="model-intro">Three scenarios with other inputs fixed; not a confidence interval. Clipped at input limits.</p>
+      <summary>Input sensitivity</summary>
+      <p class="model-intro">Vary one input at a time; other inputs stay fixed. These samples are not confidence intervals or guaranteed extremes. Angle changes are relative percentages, not added degrees.</p>
+      <div class="ctl"><label for="sensitivity-param">Vary</label><select id="sensitivity-param"><option value="diameter">Diameter</option><option value="velocity">Incoming speed</option><option value="density">Bulk density</option><option value="angleDeg">Impact angle</option></select></div>
+      <div class="ctl"><label for="sensitivity-span">Relative change either side</label><select id="sensitivity-span"><option value="0.05">±5%</option><option value="0.1" selected>±10%</option><option value="0.2">±20%</option><option value="0.5">±50%</option></select></div>
       <div id="sensitivity-readouts"></div>
     </details>
     <div id="observer-section">

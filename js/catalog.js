@@ -1,3 +1,5 @@
+import { addCatalogEvidence } from './catalog-evidence.js';
+
 // catalog.js — documented Earth impacts + a few what-if NEOs.
 // Preset parameters are illustrative assumptions, not calibrated reconstructions.
 // craterKm records observed or reconstructed structure diameters (definitions vary).
@@ -52,7 +54,7 @@ export const CATALOG = [
     where: 'Sikhote-Alin mountains, Russia',
     diameter: 10, comp: 'iron', velocity: 14000, angleDeg: 40,
     lat: 46.16, lon: 134.65, target: 'sedimentary', craterKm: 0.026,
-    blurb: 'An iron meteoroid shattered in the lower atmosphere. Survivors punched a strewn field of pits — a rare iron fall on camera.',
+    blurb: 'An iron meteoroid shattered in the lower atmosphere. Survivors punched a strewn field of pits — an observed iron fall with recovered meteorites.',
   },
   {
     id: 'barringer',
@@ -62,13 +64,13 @@ export const CATALOG = [
     where: 'Arizona, USA',
     diameter: 50, comp: 'iron', velocity: 17000, angleDeg: 45,
     lat: 35.027, lon: -111.023, target: 'sedimentary', craterKm: 1.2,
-    blurb: 'Meteor Crater. A 50 m iron made the textbook simple bowl — 1.2 km across, rim still sharp in the desert.',
+    blurb: 'Meteor Crater: a simple bowl about 1.2 km across. The 50 m iron projectile here is an illustrative input choice.',
   },
   {
     id: 'wolfe-creek',
     name: 'Wolfe Creek',
     era: 'recent',
-    when: '~300,000 years ago',
+    when: '~120,000 years ago (2019 dating)',
     where: 'Western Australia',
     diameter: 15, comp: 'iron', velocity: 17000, angleDeg: 45,
     lat: -19.171, lon: 127.795, target: 'crystalline', craterKm: 0.88,
@@ -78,7 +80,7 @@ export const CATALOG = [
     id: 'lonar',
     name: 'Lonar',
     era: 'recent',
-    when: '~570,000 years ago',
+    when: '~570,000 years ago (isotopic estimate; debated)',
     where: 'Maharashtra, India',
     diameter: 60, comp: 'rock', velocity: 20000, angleDeg: 45,
     lat: 19.977, lon: 76.508, target: 'crystalline', craterKm: 1.8,
@@ -153,7 +155,7 @@ export const CATALOG = [
     where: 'Yucatán, Mexico',
     diameter: 12000, comp: 'rock', velocity: 20000, angleDeg: 60,
     lat: 21.3, lon: -89.5, target: 'shelf', craterKm: 180,
-    blurb: 'The K–Pg impactor. A ~12 km body into a shallow carbonate sea. Soot, sulfur, and a global winter ended the non-avian dinosaurs.',
+    blurb: 'The K–Pg impact structure. This preset chooses a 12 km body and a 60° trajectory; it is not a fitted reconstruction of the extinction event.',
   },
   {
     id: 'nadir',
@@ -204,7 +206,7 @@ export const CATALOG = [
     where: 'Free State, South Africa',
     diameter: 15000, comp: 'rock', velocity: 20000, angleDeg: 45,
     lat: -26.86, lon: 27.47, target: 'crystalline', craterKm: 300,
-    blurb: 'The largest confirmed crater on Earth — originally ~300 km. The Vredefort Dome is the eroded central uplift.',
+    blurb: 'The largest confirmed crater on Earth — with reconstructed original diameter estimates of 180–300 km. The Vredefort Dome is the eroded central uplift.',
   },
   {
     id: 'acraman',
@@ -222,9 +224,9 @@ export const CATALOG = [
     era: 'planetary',
     when: 'if it hit — 2029 is a flyby',
     where: 'pick a city',
-    diameter: 370, comp: 'rock', velocity: 12600, angleDeg: 45,
+    diameter: 340, comp: 'rock', velocity: 12600, angleDeg: 45,
     target: 'sedimentary', pickCity: true,
-    blurb: '99942 Apophis, ~370 m. The 2029 encounter is a flyby. This preset assumes an impact speed and angle for a hypothetical comparison.',
+    blurb: '99942 Apophis, mean diameter ~340 m. The 2029 encounter is a flyby. This preset assumes an impact speed and angle for a hypothetical comparison.',
   },
   {
     id: 'bennu',
@@ -253,7 +255,7 @@ export const CATALOG = [
     when: 'hypothetical',
     where: 'Earth-size target',
     diameter: 3474000, comp: 'rock', velocity: 12000, angleDeg: 45,
-    blurb: 'A lunar-mass projectile. The remnant, melt, and spin sit in the Leinhardt–Stewart giant-impact regime.',
+    blurb: 'A lunar-size projectile with an assumed rock density. The remnant, melt, and spin sit in the Leinhardt–Stewart giant-impact regime.',
   },
   {
     id: 'theia',
@@ -273,7 +275,7 @@ export const CATALOG = [
     diameter: 6800000, comp: 'rock', velocity: 13000, angleDeg: 40,
     blurb: 'A fast, grazing giant impact. The projectile is stripped and escapes — the Genda–Kokubo–Ida hit-and-run branch.',
   },
-];
+].map(addCatalogEvidence);
 
 export function eventById(id) {
   return CATALOG.find((e) => e.id === id);

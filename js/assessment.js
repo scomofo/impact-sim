@@ -1,4 +1,5 @@
 // Reproducible, rendering-independent assessment/report layer.
+import { CATALOG_VERSION } from './catalog-evidence.js';
 import { computeImpact, observerReport, INPUT_LIMITS, EARTH, TARGETS, MT_TNT } from './physics.js';
 
 export const MODEL_VERSION = '0.2.0';
@@ -44,25 +45,50 @@ export function modelNotes(res) {
   return notes;
 }
 
-export function diameterSensitivity(inputs, fraction = 0.1) {
+export const SENSITIVITY_PARAMETERS = Object.freeze({
+  diameter: { label: 'Diameter', unit: 'm', displayScale: 1 },
+  velocity: { label: 'Incoming speed', unit: 'm/s', displayUnit: 'km/s', displayScale: 0.001 },
+  density: { label: 'Bulk density', unit: 'kg/m³', displayScale: 1 },
+  angleDeg: { label: 'Impact angle', unit: 'degrees', displayScale: 1 },
+});
+
+export function parameterSensitivity(inputs, parameter = 'diameter', fraction = 0.1) {
+  if (!Object.hasOwn(SENSITIVITY_PARAMETERS, parameter)) throw new RangeError('Unknown sensitivity parameter.');
   if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 0.5) {
     throw new RangeError('Sensitivity fraction must be greater than 0 and at most 0.5.');
   }
-  // Three deterministic scenarios, NOT a confidence interval or extrema search.
-  const [min, max] = INPUT_LIMITS.diameter;
-  return [1 - fraction, 1, 1 + fraction].map((factor) => {
-    const res = computeImpact({ ...inputs, diameter: Math.max(min, Math.min(max, inputs.diameter * factor)) });
-    return { diameter: res.diameter, energyMt: res.energyMt, regime: res.regime,
+  // Validate the nominal scenario before clipping any perturbation.
+  const nominal = computeImpact(inputs).inputs;
+  const [min, max] = INPUT_LIMITS[parameter];
+  return [-1, 0, 1].map((direction) => {
+    const requestedValue = nominal[parameter] * (1 + direction * fraction);
+    const value = Math.max(min, Math.min(max, requestedValue));
+    const res = computeImpact({ ...nominal, [parameter]: value });
+    return { parameter, direction, requestedValue, value, clipped: value !== requestedValue,
+      inputs: res.inputs, diameter: res.diameter, energyMt: res.energyMt, regime: res.regime,
       craterDiameter: res.crater?.Dfr ?? null, burstAltitude: res.burstAlt ?? null,
       giantOutcome: res.giant?.outcome ?? null };
   });
 }
 
-export function createAssessmentReport(inputs, distance, { event = null, createdAt = new Date().toISOString() } = {}) {
+// Retained for report consumers that use the original diameter-only API.
+export function diameterSensitivity(inputs, fraction = 0.1) {
+  return parameterSensitivity(inputs, 'diameter', fraction);
+}
+
+export function sensitivityStudy(inputs, { parameter = 'diameter', fraction = 0.1 } = {}) {
+  if (!Object.hasOwn(SENSITIVITY_PARAMETERS, parameter)) throw new RangeError('Unknown sensitivity parameter.');
+  const analyses = Object.keys(SENSITIVITY_PARAMETERS).map((key) => ({ parameter: key,
+    ...SENSITIVITY_PARAMETERS[key], scenarios: parameterSensitivity(inputs, key, fraction) }));
+  return { method: 'One input at a time: lower, nominal and upper relative perturbations; others fixed. Clipped to application bounds. Not a confidence interval, joint uncertainty estimate or guaranteed extrema.',
+    fraction, selectedParameter: parameter, scenarios: analyses[0].scenarios, analyses };
+}
+
+export function createAssessmentReport(inputs, distance, { event = null, createdAt = new Date().toISOString(), sensitivity = {} } = {}) {
   const result = computeImpact(inputs);
   const observer = observerReport(result, distance);
   return {
-    schemaVersion: 1, modelVersion: MODEL_VERSION, createdAt,
+    schemaVersion: 2, modelVersion: MODEL_VERSION, catalogVersion: CATALOG_VERSION, createdAt,
     purpose: 'Educational scenario assessment using analytical estimates and labeled heuristics.',
     units: 'SI: m, kg, s, m/s, J, Pa; angles in degrees from horizontal. Fields ending in Mt are megatons TNT.',
     inputs: result.inputs, observerDistance: distance,
@@ -71,10 +97,9 @@ export function createAssessmentReport(inputs, distance, { event = null, created
       nullValues: 'Not calculated or outside model scope, not a zero effect.',
       tsunami: 'Amplitude above still water; not crest-to-trough wave height or coastal run-up.',
       animation: 'Cinematic time and sizes do not define assessment values.' },
-    event: event ? { id: event.id, name: event.name, observedCraterKm: event.craterKm ?? null,
-      sources: event.sources ?? [], note: 'Preset inputs are illustrative, not a fitted reconstruction.' } : null,
+    event: event ? { id: event.id, name: event.name, referenceCraterKm: event.craterKm ?? null, observedCraterKm: event.craterKm ?? null,
+      sources: event.sources ?? [], evidence: event.evidence ?? null, note: 'Preset inputs are illustrative, not a fitted reconstruction.' } : null,
     result, observer, notes: modelNotes(result), sources: SOURCES,
-    sensitivity: { method: 'Three diameter scenarios at -10%, nominal, +10%, clipped to application bounds; other inputs fixed. Not a confidence interval.',
-      scenarios: diameterSensitivity(result.inputs) },
+    sensitivity: sensitivityStudy(result.inputs, sensitivity),
   };
 }

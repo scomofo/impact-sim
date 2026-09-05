@@ -409,3 +409,6 @@ th, td { padding: 5px 3px; border-bottom: 1px solid var(--border); text-align: l
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+.source-scope { display: block; color: #a3afc0; line-height: 1.5; margin: 4px 0 8px; }
+#sensitivity-readouts { overflow-x: auto; }
