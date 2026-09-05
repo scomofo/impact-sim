@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EARTH, computeImpact } from './physics.js';
+import { createSceneLoop } from './scene-runtime.js';
 import { visualEffectsProfile } from './visual-model.js';
 import {
   UNIT, glowTexture, makeStarfield, makeAtmosphere, makeHeatShell,
@@ -14,7 +15,8 @@ const R = EARTH.radius / UNIT; // planet radius in scene units (6.371)
 const MIN_VISUAL = 0.03;       // minimum impactor visual radius (scene units)
 const APPROACH_TIME = 5.5;     // seconds of cinematic approach
 
-export function initScene(ui) {
+export function initScene(ui, { onFailure = () => {} } = {}) {
+const motionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
 // Planet-local: +Y north pole, +X Greenwich, +Z 90°E.
 function latLonToDir(lat, lon) {
@@ -398,8 +400,8 @@ function launch(params) {
   sim.t = 0;
   ui.setPhase('Incoming — trajectory locked');
   ui.setForecast(res, sim.exaggeration);
-  camDirector.mode = 'auto';
-  ui.setCamMode('auto');
+  camDirector.mode = motionPreference?.matches ? 'free' : 'auto';
+  ui.setCamMode(camDirector.mode);
 }
 
 function clearRun() {
@@ -689,7 +691,7 @@ function scrubTo(tau) {
 
 // --- camera director --------------------------------------------------------
 const camDirector = {
-  mode: 'auto',
+  mode: motionPreference?.matches ? 'free' : 'auto',
   tmpPos: new THREE.Vector3(),
   tmpLook: new THREE.Vector3(),
   update(dt, wall) {
@@ -779,15 +781,13 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 // --- main loop --------------------------------------------------------------
 renderer.compile(scene, camera); // pre-compile shaders so the first impact doesn't hitch
 
-const clock = new THREE.Clock();
 let wall = 0;
 
-function tick() {
-  requestAnimationFrame(tick);
-  const rawDt = Math.min(clock.getDelta(), 0.05);
+function tick(rawDt) {
   advance(rawDt);
-  wall += rawDt;
-  camDirector.update(rawDt, wall);
+  const cameraDt = sim.timeScale === 0 ? 0 : rawDt;
+  wall += cameraDt;
+  camDirector.update(cameraDt, wall);
   controls.update();
   if (sim.state !== 'idle') ui.setTimelineTime(sim.effTime - sim.runT0);
   renderer.render(scene, camera);
@@ -932,7 +932,6 @@ function advance(rawDt) {
   chunks.update(dt);
   trail.update(dt);
 }
-tick();
 
 // Debug/test hook: lets tooling step sim time without relying on rAF.
 window.__sim = { sim, advance, launch, resetPlanet, scrubTo, moon, camera };
@@ -942,13 +941,31 @@ function updatePixScale() {
 }
 updatePixScale();
 
-window.addEventListener('resize', () => {
+function resizeScene() {
   const height = document.getElementById('scene').clientHeight || window.innerHeight;
   camera.aspect = window.innerWidth / height;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, height);
   updatePixScale();
-});
+}
+window.addEventListener('resize', resizeScene);
+function motionChanged() {
+  if (motionPreference.matches) {
+    camDirector.mode = 'free';
+    ui.setCamMode('free');
+  }
+}
+motionPreference?.addEventListener('change', motionChanged);
+ui.setCamMode(camDirector.mode);
+const loop = createSceneLoop({ canvas: renderer.domElement, frame: tick, onFailure });
+handlers.dispose = () => {
+  loop.stop();
+  window.removeEventListener('resize', resizeScene);
+  motionPreference?.removeEventListener('change', motionChanged);
+  controls.dispose();
+  renderer.dispose();
+  delete window.__sim;
+};
 
 return handlers;
 }

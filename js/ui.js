@@ -523,6 +523,8 @@ export function initUI(handlers) {
       $('play-btn').textContent = v === 0 ? '⏵' : '❚❚';
     },
     setForecast(res, exaggeration) {
+      // Backward replay calls launch() again; keep the current form authoritative.
+      if (!inputsValid || Object.entries(res.inputs).some(([key, value]) => params()[key] !== value)) return;
       lastRes = res;
       $('readout-title').textContent = 'Scenario estimate';
       $('readouts').innerHTML = renderReadout(res);
