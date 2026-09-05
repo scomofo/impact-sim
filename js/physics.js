@@ -3,8 +3,8 @@
 //
 // Cratering + entry + thermal/seismic: Collins, Melosh & Marcus 2005 (Earth Impact
 // Effects Program, M&PS 40, 817). Giant impacts: Leinhardt & Stewart 2012 (ApJ 745,
-// 79) with the Genda, Kokubo & Ida 2012 merge criterion. Constants verified against
-// the published papers (see scratchpad research notes).
+// 79) with the Genda, Kokubo & Ida 2012 merge criterion. See docs/MODEL.md for
+// equation provenance, application limits, and explicitly heuristic extensions.
 
 export const G = 6.674e-11;
 export const MT_TNT = 4.184e15; // J per megaton TNT
@@ -20,6 +20,39 @@ export const EARTH = {
   momentFactor: 0.335,  // I = k M R^2 for a differentiated Earth-like body
 };
 
+export const MAX_DISTANCE = Math.PI * EARTH.radius;
+// Application bounds, not a claim of scientific validity throughout this range.
+export const INPUT_LIMITS = Object.freeze({
+  diameter: [10, 7420000], density: [500, 8000], velocity: [5000, 72000],
+  angleDeg: [5, 90], waterDepth: [0, 11000],
+});
+
+function requireRange(name, value, min, max) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw new RangeError(`${name} must be a finite number from ${min} to ${max}.`);
+  }
+}
+
+export function validateInputs(input) {
+  if (!input || typeof input !== 'object') throw new TypeError('Impact parameters are required.');
+  for (const name of ['diameter', 'density', 'velocity', 'angleDeg']) {
+    requireRange(name, input[name], ...INPUT_LIMITS[name]);
+  }
+  const target = input.target ?? 'sedimentary';
+  if (typeof target !== 'string' || !Object.hasOwn(TARGETS, target)) throw new RangeError('Unknown target terrain.');
+  const waterDepth = input.waterDepth ?? TARGETS[target].waterDepth ?? 0;
+  requireRange('waterDepth', waterDepth, ...INPUT_LIMITS.waterDepth);
+  if (waterDepth > 0 && !TARGETS[target].waterDepth) {
+    throw new RangeError('Water depth requires a water target.');
+  }
+  return { diameter: input.diameter, density: input.density, velocity: input.velocity,
+    angleDeg: input.angleDeg, target, waterDepth };
+}
+
+function validateDistance(r, allowZero = false) {
+  requireRange('distance (m)', r, allowZero ? 0 : 1, MAX_DISTANCE);
+}
+
 const L_EM = 3.5e34;    // Earth–Moon system angular momentum, kg m^2/s
 
 export const COMPOSITIONS = {
@@ -32,8 +65,8 @@ export const COMPOSITIONS = {
 export const TARGETS = {
   sedimentary: { label: 'Sedimentary rock', rho: 2500 },
   crystalline: { label: 'Crystalline rock', rho: 2750 },
-  shelf: { label: 'Continental shelf (150 m)', rho: 2500, waterDepth: 150 },
-  ocean: { label: 'Deep ocean (3.8 km)', rho: 2700, waterDepth: 3800 },
+  shelf: { label: 'Continental shelf (default 150 m)', rho: 2500, waterDepth: 150 },
+  ocean: { label: 'Deep ocean (default 3.8 km)', rho: 2700, waterDepth: 3800 },
 };
 
 const sinDeg = (d) => Math.sin((d * Math.PI) / 180);
@@ -46,7 +79,7 @@ export function impactorMass(diameter, density) {
 
 // ---------------------------------------------------------------------------
 // Atmospheric entry (CM&M section: breakup + pancake model). Applied only for
-// L0 < 1 km; larger bodies punch through the atmosphere unaffected.
+// cratering-scale objects. Avoid a discontinuous atmosphere bypass at 1 km.
 // Returns airburst-vs-surface outcome and the decelerated surface velocity.
 // ---------------------------------------------------------------------------
 const RHO_AIR0 = 1.0;  // kg/m^3 — deliberate EIEP simplification (not 1.225)
@@ -55,8 +88,11 @@ const CD = 2.0;
 const PANCAKE_FP = 7;
 
 export function simulateEntry({ L0, rhoI, v0, angleDeg }) {
+  requireRange('diameter', L0, ...INPUT_LIMITS.diameter);
+  requireRange('density', rhoI, ...INPUT_LIMITS.density);
+  requireRange('velocity', v0, ...INPUT_LIMITS.velocity);
+  requireRange('angleDeg', angleDeg, ...INPUT_LIMITS.angleDeg);
   const sinT = sinDeg(angleDeg);
-  if (L0 >= 1000) return { outcome: 'surface', vSurface: v0 };
   const rhoAir = (z) => RHO_AIR0 * Math.exp(-z / SCALE_H);
   const vIntact = (z) =>
     v0 * Math.exp((-3 * rhoAir(z) * CD * SCALE_H) / (4 * rhoI * L0 * sinT)); // Eq. 8
@@ -64,28 +100,30 @@ export function simulateEntry({ L0, rhoI, v0, angleDeg }) {
   const If = (4.07 * CD * SCALE_H * Yi) / (rhoI * L0 * v0 * v0 * sinT);       // Eq. 12
   if (If >= 1) {
     const vTerm = Math.sqrt((4 * rhoI * L0 * EARTH.g) / (3 * CD * RHO_AIR0));
-    return { outcome: 'surface', vSurface: Math.max(vIntact(0), vTerm) };
+    return { outcome: 'surface', vSurface: Math.min(v0, Math.max(vIntact(0), vTerm)), dispersion: L0 };
   }
   const zStar = -SCALE_H * (Math.log(Yi / (RHO_AIR0 * v0 * v0)) +
     1.308 - 0.314 * If - 1.303 * Math.sqrt(1 - If));                          // Eq. 11
-  const vStar = vIntact(Math.max(zStar, 0));
+  if (zStar <= 0) return { outcome: 'surface', vSurface: vIntact(0), dispersion: L0 };
+  const vStar = vIntact(zStar);
   const l = L0 * sinT * Math.sqrt(rhoI / (CD * rhoAir(zStar)));               // Eq. 16
   const zBurst = zStar - 2 * SCALE_H *
     Math.log(1 + (l / (2 * SCALE_H)) * Math.sqrt(PANCAKE_FP ** 2 - 1));       // Eq. 18
   const Lz = (z) => L0 * Math.sqrt(1 +
     ((2 * SCALE_H / l) * (Math.exp((zStar - z) / (2 * SCALE_H)) - 1)) ** 2);  // Eq. 15
   const vPancake = (z) => { // Eq. 17 with a numerical integral
-    const N = 64, dz = (zStar - z) / N;
+    const N = 256, dz = (zStar - z) / N;
     let I = 0;
     for (let i = 0; i <= N; i++) {
-      I += (i === 0 || i === N ? 0.5 : 1) * rhoAir(z + i * dz) * Lz(z + i * dz) ** 2 * dz;
+      I += (i === 0 || i === N ? 1 : i % 2 ? 4 : 2) *
+        rhoAir(z + i * dz) * Lz(z + i * dz) ** 2 * dz / 3;
     }
     return vStar * Math.exp((-3 * CD * I) / (4 * rhoI * L0 ** 3 * sinT));
   };
   if (zBurst > 0) {
-    return { outcome: 'airburst', zBreakup: zStar, zBurst, vBurst: vPancake(zBurst) };
+    return { outcome: 'airburst', zBreakup: zStar, zBurst, vBurst: vPancake(zBurst), dispersion: Lz(zBurst) };
   }
-  return { outcome: 'surface', zBreakup: zStar, vSurface: vPancake(0) };
+  return { outcome: 'surface', zBreakup: zStar, vSurface: vPancake(0), dispersion: Lz(0) };
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +199,10 @@ export function burnRadius(E, energyMt, vSurface) {
 
 // Peak blast overpressure (Pa) at distance r, optional burst altitude (Eq. 54-58).
 export function peakOverpressure(E, r, zBurst = 0) {
+  requireRange('blast energy (J)', E, 0, Number.MAX_VALUE);
+  validateDistance(r, zBurst > 0);
+  requireRange('burst altitude (m)', zBurst, 0, 1e6);
+  if (E === 0) return 0;
   const s = Math.cbrt(E / 4.184e12);            // yield-scale to 1 kt
   const r1 = r / s, zb1 = zBurst / s;
   const eq54 = (rr, rx) => ((75000 * rx) / (4 * rr)) * (1 + 3 * (rx / rr) ** 1.3);
@@ -177,12 +219,17 @@ export function peakWindSpeed(p) {
 }
 
 export const BLAST_DAMAGE = [ // Pa thresholds, descending (Table 4)
-  [426000, 'cars thrown, girder bridges collapse'],
-  [379000, 'steel-frame buildings near collapse'],
-  [297000, 'truss bridges collapse'],
-  [121000, 'multistory brick buildings collapse'],
-  [42600, 'wood-frame houses collapse'],
-  [6900, 'glass windows shatter'],
+  [426000, 'vehicles severely displaced and deformed'],
+  [379000, 'girder bridges may collapse'],
+  [297000, 'vehicles may overturn'],
+  [273000, 'steel frames may approach collapse'],
+  [121000, 'truss bridges may collapse'],
+  [100000, 'truss bracing may deform severely'],
+  [42600, 'load-bearing masonry buildings may collapse'],
+  [38500, 'masonry walls may crack severely'],
+  [26800, 'wood-frame buildings may largely collapse'],
+  [22900, 'wood-frame roofs and partitions may fail'],
+  [6900, 'window glass may shatter'],
 ];
 export function blastDamage(p) {
   for (const [thr, desc] of BLAST_DAMAGE) if (p >= thr) return desc;
@@ -209,21 +256,24 @@ export function thermalAtDistance(E, r, vSurface) {
   if (exposure > 0.42e6 * scale) effects.push('3rd-degree burns');
   else if (exposure > 0.25e6 * scale) effects.push('2nd-degree burns');
   else if (exposure > 0.13e6 * scale) effects.push('1st-degree burns');
-  if (exposure > 0.38e6 * scale) effects.push('grass and trees ignite');
+  if (exposure > 0.38e6 * scale) effects.push('grass may ignite');
+  if (exposure > 0.25e6 * scale) effects.push('deciduous trees may ignite');
   const duration = (eta * E) / (2 * Math.PI * Rf * Rf * 5.67e-8 * 3000 ** 4); // Eq. 35
   return { exposure, effects, duration, Rf, belowHorizon: false };
 }
 
 // Effective seismic magnitude at distance (Eq. 41) and Mercalli intensity (Table 2).
 export function seismicAtDistance(M, r) {
+  validateDistance(r, true);
   const rkm = r / 1000;
   let Meff;
   if (rkm < 60) Meff = M - 0.0238 * rkm;
   else if (rkm < 700) Meff = M - 0.0048 * rkm - 1.1644;
   else Meff = M - 1.66 * Math.log10(r / EARTH.radius) - 6.399;
   let mercalli;
-  if (Meff < 2) mercalli = 'not felt';
-  else if (Meff < 4) mercalli = 'II–IV · light shaking';
+  if (Meff < 2) mercalli = 'I–II · weak or not felt';
+  else if (Meff < 3) mercalli = 'II–III · weak shaking';
+  else if (Meff < 4) mercalli = 'III–IV · light shaking';
   else if (Meff < 5) mercalli = 'IV–V · moderate shaking';
   else if (Meff < 6) mercalli = 'VI–VII · damaging shaking';
   else if (Meff < 7) mercalli = 'VII–VIII · severe, buildings damaged';
@@ -267,29 +317,36 @@ export function ejectaAtDistance(Dtc, DfrHalf, energyMt, fireballR, r) {
 // is capped by water depth; then 1/sqrt(r) cylindrical spreading. Speed is
 // shallow-water c = sqrt(g h). Order-of-magnitude, not a full hydrocode.
 export function tsunamiAtDistance(waterCrater, waterDepth, r) {
+  validateDistance(r, true);
   if (!(waterCrater > 0) || !(waterDepth > 0)) return null;
+  if (r <= waterCrater / 2) return { insideCavity: true, amplitude: null, arrival: null };
   const amp0 = Math.min(waterDepth, 0.14 * waterCrater);
-  const height = amp0 * Math.sqrt(Math.max(waterCrater, 1) / (2 * Math.max(r, 1)));
+  const amplitude = amp0 * Math.sqrt(waterCrater / (2 * r));
   const c = Math.sqrt(EARTH.g * waterDepth);
-  return { height, arrival: r / c };
+  return { amplitude, arrival: r / c, heuristic: true, coastalRunup: null };
 }
 
 // Everything an observer at distance r experiences, with arrival times.
 export function observerReport(res, r) {
+  validateDistance(r, true);
   if (res.regime === 'giant') return { giant: true };
   if (res.regime === 'airburst') {
-    const E = res.burstEnergyMt * MT_TNT;
+    const E = res.blastEnergy;
     const p = peakOverpressure(E, r, res.burstAlt);
     // CM&M 2005's blast fit loses accuracy for high scaled burst altitudes
     // (Collins et al. 2017 revisits this) — flag rather than overstate.
-    const unreliable = res.burstAlt / Math.cbrt(E / 4.184e12) > 550;
+    const unreliable = res.burstAlt / Math.cbrt(E / 4.184e12) > 550 || E > 1e4 * MT_TNT || r > 1e6;
     return {
-      blast: { p, wind: peakWindSpeed(p), damage: blastDamage(p), arrival: r / 330, unreliable },
+      blast: { p, wind: peakWindSpeed(p), damage: blastDamage(p),
+        arrival: Math.hypot(r, res.burstAlt) / 330, unreliable, arrivalApproximate: true },
       seismic: null, thermal: null, ejecta: null,
     };
   }
   const c = res.crater;
-  if (r <= c.Dfr / 2) return { insideCrater: true };
+  const tsunami = res.tsunami ? tsunamiAtDistance(res.waterCrater, res.waterDepth, r) : null;
+  if (res.waterCrater && r <= res.waterCrater / 2) return { insideWaterCavity: true, tsunami };
+  if (c && r <= c.Dfr / 2) return { insideCrater: true };
+  if (r < 1) return { unresolvedNearField: true };
   const thermal = thermalAtDistance(res.energySurf, r, res.vSurface);
   const insideFireball = thermal && !thermal.belowHorizon && r < thermal.Rf;
   const p = peakOverpressure(res.energySurf, r, 0);
@@ -299,28 +356,28 @@ export function observerReport(res, r) {
     blast: {
       p, wind: peakWindSpeed(p), damage: blastDamage(p), arrival: r / 330,
       // The 1-kt blast fit overestimates 2-5x above ~1e4 Mt (paper caveat).
-      unreliable: res.energySurf > 1e4 * MT_TNT,
+      unreliable: res.energySurf > 1e4 * MT_TNT || r > 1e6, arrivalApproximate: true,
     },
-    seismic: seismicAtDistance(res.seismic, r),
-    // Stifling gate uses surface energy and the ungated fireball length scale.
-    ejecta: ejectaAtDistance(c.Dtc, c.Dfr / 2, res.energySurf / MT_TNT,
-      0.002 * Math.cbrt(res.energySurf), r),
+    seismic: res.seismic == null ? null : seismicAtDistance(res.seismic, r),
+    // Solid-ground energy and its ungated fireball length scale set stifling.
+    ejecta: c ? ejectaAtDistance(c.Dtc, c.Dfr / 2, res.energySeafloor / MT_TNT,
+      0.002 * Math.cbrt(res.energySeafloor), r) : null,
+    groundEffectsUnresolved: !c,
   };
   if (res.tsunami && res.waterCrater && res.waterDepth) {
-    report.tsunami = tsunamiAtDistance(res.waterCrater, res.waterDepth, r);
+    report.tsunami = tsunami;
   }
   return report;
 }
 
-// Severity bands per Chapman & Morrison 1994 / Toon et al. 1997 (Mt TNT).
+// Display-only energy bands. These are NOT climate, casualty, or extinction predictions.
 export function severityLadder(energyMt) {
-  if (energyMt < 1e2) return { level: 0, label: 'Local damage' };
-  if (energyMt < 1e4) return { level: 1, label: 'Regional devastation' };
-  if (energyMt < 1e5) return { level: 2, label: 'Continental catastrophe' };
-  if (energyMt < 1e6) return { level: 3, label: 'Global climate catastrophe' };
-  if (energyMt < 1e8) return { level: 4, label: 'Civilization-ending' };
-  if (energyMt < 3e10) return { level: 5, label: 'Mass extinction — Chicxulub class and beyond' };
-  return { level: 5, label: 'Oceans boil — surface sterilized' };
+  if (energyMt < 1e2) return { level: 0, label: 'Energy band · below 100 Mt' };
+  if (energyMt < 1e4) return { level: 1, label: 'Energy band · 100–10,000 Mt' };
+  if (energyMt < 1e5) return { level: 2, label: 'Energy band · 10⁴–10⁵ Mt' };
+  if (energyMt < 1e6) return { level: 3, label: 'Energy band · 10⁵–10⁶ Mt' };
+  if (energyMt < 1e8) return { level: 4, label: 'Energy band · 10⁶–10⁸ Mt' };
+  return { level: 5, label: 'Energy band · above 10⁸ Mt' };
 }
 
 // ---------------------------------------------------------------------------
@@ -391,10 +448,12 @@ export function giantResults(mp, rp, velocity, angleDeg) {
   const merged = outcome === 'perfect merge' || outcome === 'accretion' ||
     outcome === 'graze-and-merge' || outcome === 'partial accretion' || outcome === 'erosion';
 
-  // Debris disk heuristic (Canup SPH anchor; ± factor ~3). Only merging geometries.
+  // Uncalibrated debris-disk heuristic. Only merging geometries.
   let diskMass = 0;
   if (merged && outcome !== 'erosion') {
-    diskMass = clamp(0.45 * mp * b * b * Math.exp(-(vRatio - 1) / 0.6), 0, 0.05 * Mtot);
+    // A heuristic disk cannot contain mass already assigned to the remnant.
+    diskMass = clamp(0.45 * mp * b * b * Math.exp(-(vRatio - 1) / 0.6),
+      0, Math.min(0.05 * Mtot, (1 - mlrFrac) * Mtot));
   }
   const diskMoons = diskMass / M_MOON;
   const moonForming = diskMoons >= 0.4;
@@ -406,6 +465,7 @@ export function giantResults(mp, rp, velocity, angleDeg) {
   // Spin from delivered angular momentum (merged cases).
   const Limp = mu * velocity * b * (rt + rp);
   const Mlr = mlrFrac * Mtot;
+  const otherMass = Math.max(0, Mtot - Mlr - diskMass);
   let dayHours = null, synestia = false;
   if (merged) {
     const Lpost = 0.9 * Limp + EARTH.spinAngMom;
@@ -418,82 +478,88 @@ export function giantResults(mp, rp, velocity, angleDeg) {
   return {
     vEsc, vRatio, vCr, b, bCrit, grazing, QR, QStar, ratio,
     mlrFrac, Mlr, outcome, merged, dayHours, magmaOcean, meltFraction,
-    moonForming, diskMoons, synestia, gamma, alpha,
+    moonForming, diskMoons, diskMass, otherMass, synestia, gamma, alpha,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Top-level: everything the UI needs from one call.
 // ---------------------------------------------------------------------------
-export function computeImpact({ diameter, density, velocity, angleDeg, target = 'sedimentary' }) {
+export function computeImpact(input) {
+  const inputs = validateInputs(input);
+  const { diameter, density, velocity, angleDeg, target, waterDepth } = inputs;
   const mass = impactorMass(diameter, density);
-  const energy0 = 0.5 * mass * velocity * velocity;   // top-of-atmosphere
+  const energy0 = 0.5 * mass * velocity * velocity;
   const energyMt = energy0 / MT_TNT;
   const gamma = mass / EARTH.mass;
-
   const base = {
-    diameter, density, velocity, angleDeg, mass,
-    energy: energy0, energyMt, gamma,
+    ...inputs, inputs, mass, energy: energy0, energyMt, gamma,
     chicxulubs: energyMt / 1.0e8,
     recurrence: recurrenceYears(energyMt),
   };
 
-  const entry = simulateEntry({ L0: diameter, rhoI: density, v0: velocity, angleDeg });
-  if (entry.outcome === 'airburst') {
-    const burstEnergy = 0.5 * mass * entry.vBurst * entry.vBurst;
+  // Application regime bridge, independent of the selected terrain. Crater
+  // scaling at planetary size is only a routing indicator, not a prediction.
+  const routingCrater = craterResults(diameter, density, velocity, angleDeg);
+  if (gamma > 0.01 || routingCrater.Dtc >= EARTH.radius) {
     return {
-      ...base, regime: 'airburst',
-      breakupAlt: entry.zBreakup, burstAlt: entry.zBurst,
-      burstEnergyMt: burstEnergy / MT_TNT,
-      severity: severityLadder(energyMt),
-    };
-  }
-
-  const vSurf = entry.vSurface;
-  const eSurf = 0.5 * mass * vSurf * vSurf;
-  const tgt = TARGETS[target] ?? TARGETS.sedimentary;
-
-  // Ocean target: crater the water column first, decay velocity through the
-  // water (Eq. 65, C_D = 0.877), then crater the seafloor with what is left.
-  let waterCrater = null, tsunami = false, vFloor = vSurf;
-  if (tgt.waterDepth) {
-    waterCrater = craterResults(diameter, density, vSurf, angleDeg, 1000, true).Dtc;
-    vFloor = vSurf * Math.exp(
-      (-3 * 1000 * 0.877 * tgt.waterDepth) / (2 * density * diameter * sinDeg(angleDeg)));
-    tsunami = waterCrater > tgt.waterDepth;
-  }
-  const seafloorStopped = tgt.waterDepth && vFloor < 1000;
-  const crater = craterResults(diameter, density, tgt.waterDepth ? vFloor : vSurf, angleDeg, tgt.rho);
-
-  // Regime bridge: smoothstep on transient-crater size vs planet radius; mass
-  // ratio > 1e-2 is always global (LS12 similar-size regime).
-  const x = clamp((crater.Dtc / EARTH.radius - 0.5) / 1.0, 0, 1);
-  const globalWeight = x * x * (3 - 2 * x);
-
-  if (gamma > 0.01 || globalWeight >= 0.5) {
-    return {
-      ...base, regime: 'giant',
+      ...base, regime: 'giant', recurrence: null,
       giant: giantResults(mass, diameter / 2, velocity, angleDeg),
       severity: { level: 5, label: 'Planet-altering giant impact' },
     };
   }
 
+  const entry = simulateEntry({ L0: diameter, rhoI: density, v0: velocity, angleDeg });
+  if (entry.outcome === 'airburst') {
+    const residualEnergy = 0.5 * mass * entry.vBurst ** 2;
+    return {
+      ...base, regime: 'airburst',
+      breakupAlt: entry.zBreakup, burstAlt: entry.zBurst,
+      vBurst: entry.vBurst, residualEnergy, depositedEnergy: energy0 - residualEnergy,
+      // Static-source approximation (Collins et al. 2017): use initial kinetic
+      // energy as total yield. Residual swarm energy is NOT blast yield.
+      blastEnergy: energy0,
+      burstEnergyMt: residualEnergy / MT_TNT, // legacy alias: residual kinetic energy
+      severity: severityLadder(energyMt),
+    };
+  }
+
+  const vSurf = entry.vSurface;
+  const eSurf = 0.5 * mass * vSurf ** 2;
+  const tgt = TARGETS[target];
+  let waterCrater = null, vFloor = vSurf;
+  if (waterDepth > 0) {
+    waterCrater = craterResults(diameter, density, vSurf, angleDeg, 1000, true).Dtc;
+    // Eq. 65 uses the post-entry swarm diameter (L), not the initial L0.
+    vFloor *= Math.exp((-3 * 1000 * 0.877 * waterDepth) /
+      (2 * density * entry.dispersion * sinDeg(angleDeg)));
+  }
+  const energySeafloor = 0.5 * mass * vFloor ** 2;
+  // Below 1 km/s, withhold hypervelocity ground effects. This is an application
+  // validity gate, NOT a prediction that sediment disturbance or damage is zero.
+  const groundEffectsSupported = vFloor >= 1000;
+  const seafloorStopped = waterDepth > 0 && !groundEffectsSupported;
+  const crater = groundEffectsSupported
+    ? craterResults(diameter, density, vFloor, angleDeg, tgt.rho) : null;
   const fb = fireballRadius(eSurf, vSurf);
   return {
     ...base, regime: 'crater',
-    vSurface: vSurf, energySurf: eSurf,
-    seismic: seismicMagnitude(eSurf),   // shaking couples to the surface energy
-    target, waterDepth: tgt.waterDepth ?? 0, waterCrater, tsunami, seafloorStopped,
-    crater,
-    basin: crater.Dtc > 0.25 * EARTH.radius, // crater scaling stretched — basin event
-    melt: meltVolume(eSurf, angleDeg, vSurf, crater.Vtc),
+    vSurface: vSurf, energySurf: eSurf, vSeafloor: vFloor, energySeafloor,
+    depositedEnergy: energy0 - eSurf, waterDepositedEnergy: eSurf - energySeafloor,
+    dispersion: entry.dispersion,
+    seismic: groundEffectsSupported ? seismicMagnitude(energySeafloor) : null,
+    waterCrater, tsunami: waterDepth > 0 && waterCrater > waterDepth,
+    seafloorStopped, groundEffectsSupported, crater,
+    craterField: !!crater && entry.dispersion >= crater.Dtc,
+    basin: !!crater && crater.Dtc > 0.25 * EARTH.radius,
+    melt: crater ? meltVolume(energySeafloor, angleDeg, vFloor, crater.Vtc) : null,
     fireball: fb,
-    fireballTimeMax: fb ? fb / vSurf : null,                          // Eq. 33
+    fireballTimeMax: fb ? fb / vSurf : null,
     fireballDuration: fb
-      ? (3e-3 * eSurf) / (2 * Math.PI * fb * fb * 5.67e-8 * 3000 ** 4) // Eq. 35
+      ? (3e-3 * eSurf) / (2 * Math.PI * fb * fb * 5.67e-8 * 3000 ** 4)
       : null,
     burn: burnRadius(eSurf, eSurf / MT_TNT, vSurf),
-    severity: severityLadder(energyMt),
+    severity: severityLadder(eSurf / MT_TNT),
   };
 }
 

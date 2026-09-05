@@ -1,5 +1,6 @@
 // catalog.js — documented Earth impacts + a few what-if NEOs.
-// Impactor sizes are literature estimates; craterKm values are measured.
+// Preset parameters are illustrative assumptions, not calibrated reconstructions.
+// craterKm records observed or reconstructed structure diameters (definitions vary).
 
 export const ERA_LABELS = {
   witnessed: 'Witnessed',
@@ -101,7 +102,7 @@ export const CATALOG = [
     where: 'Bellingshausen Sea, Southern Ocean',
     diameter: 2000, comp: 'rock', velocity: 20000, angleDeg: 45,
     lat: -57.78, lon: -90.79, target: 'ocean',
-    blurb: 'No crater — a kilometre-scale body hit deep water. The only confirmed Cenozoic ocean impact; tsunami and ejecta in seafloor cores.',
+    blurb: 'Evidence of a kilometre-scale deep-water impact in Southern Ocean sediments. The preset is illustrative; this simple model may predict a seafloor crater and does not reconstruct the observed event.',
   },
   {
     id: 'ries',
@@ -137,11 +138,12 @@ export const CATALOG = [
     id: 'hiawatha',
     name: 'Hiawatha',
     era: 'cenozoic',
-    when: 'uncertain — Pleistocene candidate',
+    when: '~58 million years ago',
     where: 'northwest Greenland',
     diameter: 1500, comp: 'iron', velocity: 20000, angleDeg: 45,
     lat: 78.72, lon: -66.18, target: 'crystalline', craterKm: 31,
-    blurb: 'A 31 km structure under the ice sheet, spotted in radar. Age and iron-rich impactor are still argued; running it as an iron strike.',
+    blurb: 'A buried Greenland crater dated to the Late Paleocene. The iron composition here is a scenario assumption.',
+    sources: [{ label: 'Kenny et al. (2022)', url: 'https://doi.org/10.1126/sciadv.abm2434' }],
   },
   {
     id: 'chicxulub',
@@ -160,8 +162,9 @@ export const CATALOG = [
     when: '66 million years ago',
     where: 'Guinea Basin, off West Africa',
     diameter: 400, comp: 'rock', velocity: 20000, angleDeg: 45,
-    lat: 9.39, lon: -17.09, target: 'ocean', craterKm: 8.5,
-    blurb: 'An 8.5 km seafloor crater, same interval as Chicxulub. A possible sibling strike — or coincidence — in the end-Cretaceous.',
+    lat: 9.39, lon: -17.09, target: 'ocean', waterDepth: 800, craterKm: 8.5,
+    blurb: 'A buried marine structure near the K–Pg boundary. The inferred water depth at impact was about 800 m; a connection to Chicxulub is unproven.',
+    sources: [{ label: 'Nicholson et al. (2024)', url: 'https://www.nature.com/articles/s43247-024-01700-4' }],
   },
   {
     id: 'manicouagan',
@@ -221,17 +224,18 @@ export const CATALOG = [
     where: 'pick a city',
     diameter: 370, comp: 'rock', velocity: 12600, angleDeg: 45,
     target: 'sedimentary', pickCity: true,
-    blurb: '99942 Apophis, ~370 m. Not an impact in 2029. Drop it on a city to see a city-killer: a few-kilometre crater.',
+    blurb: '99942 Apophis, ~370 m. The 2029 encounter is a flyby. This preset assumes an impact speed and angle for a hypothetical comparison.',
   },
   {
     id: 'bennu',
     name: 'Bennu',
     era: 'planetary',
-    when: 'if it hit — ~1 in 1,750 this century',
+    when: 'hypothetical impact; not a predicted event',
     where: 'pick a city',
     diameter: 490, comp: 'porous', velocity: 12800, angleDeg: 45,
     target: 'sedimentary', pickCity: true,
-    blurb: '101955 Bennu, the OSIRIS-REx rubble pile. ~490 m, carbonaceous. A regional catastrophe if the 2100s window goes wrong.',
+    blurb: '101955 Bennu, the OSIRIS-REx rubble pile. NASA’s 2021 analysis estimated a cumulative impact probability of about 1 in 1,750 through 2300, not this century. This preset assumes an impact for comparison.',
+    sources: [{ label: 'NASA/JPL (2021 orbit assessment)', url: 'https://www.jpl.nasa.gov/news/nasa-spacecraft-provides-insight-into-asteroid-bennus-future-orbit/' }],
   },
   {
     id: 'ceres',
@@ -258,7 +262,7 @@ export const CATALOG = [
     when: '~4.5 billion years ago',
     where: 'proto-Earth',
     diameter: 7420000, comp: 'rock', velocity: 10000, angleDeg: 45,
-    blurb: 'The canonical Moon-forming strike: Mars-mass Theia, graze-and-merge, a magma ocean and a debris disk that becomes the Moon.',
+    blurb: 'An illustrative Mars-mass Theia scenario. Collision scaling suggests merging; disk mass, melting and subsequent moon formation are heuristic visualizations.',
   },
   {
     id: 'hit-and-run',

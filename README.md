@@ -1,52 +1,54 @@
 # Planetary Impact Simulator
 
-An interactive 3D simulator of large bodies hitting an Earth-size planet — from 10 m meteors that burst in the atmosphere to Mars-size giant impacts that form moons or shatter the planet.
+Explore hypothetical impacts on an Earth-size planet with analytical assessment readouts and an optional cinematic 3D view. Scenarios range from atmospheric airbursts to planetary collisions.
 
-The visuals are cinematic; the numbers are not. Every readout comes from published impact physics:
+The app estimates impact consequences. It does not forecast an asteroid's collision probability, casualties, evacuation zones or coastal inundation. Some extensions are explicitly labeled heuristics. See [model methods and validation](docs/MODEL.md) for sources, assumptions and known gaps.
 
-- **Cratering, atmospheric entry, thermal, blast, seismic, ejecta** — Collins, Melosh & Marcus (2005), the *Earth Impact Effects Program* (M&PS 40, 817), including pi-group crater scaling, the pancake breakup model, and distance-based damage.
-- **Giant impacts** — Leinhardt & Stewart (2012, ApJ 745, 79) disruption scaling with the Genda, Kokubo & Ida (2012) merge criterion: accretion, graze-and-merge, hit-and-run, erosion, catastrophic disruption.
-- The Theia preset reproduces the canonical Moon-forming impact: graze-and-merge, ~1.75 lunar-mass debris disk, global magma ocean, ~4.5 h day.
+## Run
 
-## Run it
+Serve this directory over HTTP; no build step is needed:
 
-Any static file server works (ES modules need http, not file://):
-
-```
-npx http-server . -p 8742
+```sh
+python3 -m http.server 8742
 ```
 
-Then open http://localhost:8742. Textures and three.js load from CDN — first load needs a network connection.
+Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URLs. If the 3D module or graphics initialization fails, numerical controls, comparisons and report export remain available.
 
-Share a catalog event with `?p=eltanin` (or `ries`, `apophis`, `theia`, …).
+## Assess a scenario
 
-## Things to try
+- Choose a catalog event or enter exact diameter, speed, angle and density. Preset values survive slider rounding. Speed is before atmospheric entry; angle is above horizontal.
+- Select target terrain and, for water impacts, water depth. Clicking the globe changes a visual marker; it does not look up terrain or population.
+- Enter observer distance to inspect pressure, heat, shaking, ejecta and illustrative open-water amplitude where the model supports them.
+- Expand model assumptions and the three-scenario diameter sensitivity comparison. Sensitivity samples are not confidence intervals.
+- Export JSON to preserve exact inputs, model version, sources, assumptions and observer results. Compare up to four scenarios.
+- Launch and scrub the 3D illustration. Animation time, sizes and wave fronts are cinematic, not geographical hazard boundaries.
 
-A suggested tour through the catalog:
+Share an unmodified catalog preset with `?p=bennu`, `?p=ries`, `?p=theia`, etc. Custom input changes clear the preset URL; use JSON export to preserve custom scenarios.
 
-1. **Eltanin** — deep Pacific, no hole. Watch the teal tsunami front and the observer tsunami estimate.
-2. **Ries** — Nördlingen is built from the suevite ejecta. Ground zero snaps to Bavaria.
-3. **Apophis** — not an impact in 2029. Pick a city (New York, Tokyo, …) and drop the ~370 m NEO.
-4. **Theia** — graze-and-merge, magma ocean, debris disk that becomes the Moon.
+Catalog values are illustrative rather than fitted historical reconstructions. When a reference crater diameter exists, the app shows it beside the calculated result so disagreement is visible. Updated source notes include Hiawatha's age, Nadir's inferred water depth and the time window of NASA's 2021 Bennu risk estimate.
 
-Also:
+## Development checks
 
-- Click the planet to move ground zero; choose **continental shelf** or **deep ocean** as the target for tsunamis
-- Drag the **observer distance** slider — "You are standing…" tells you what the blast, heat, shaking, ejecta, and tsunami do at that range, with arrival times
-- Scrub the **timeline** backward and forward through an impact
-- **Hit-and-run**: a Mars-size body that grazes Earth and escapes, mangled
-- Crank a Mars-size impactor to 72 km/s, head-on, and see what it actually takes to shatter a planet (spoiler: 2× escape velocity is nowhere near enough)
+Node 22.22.2+ or 24.15.0+ (supported LTS versions) is required only for development tests:
+
+```sh
+npm ci
+npm run check
+npm test
+```
+
+Tests include published calculation examples, conservation and boundary checks, a 3,840-scenario grid, DOM interactions, report exports and renderer-failure recovery. GitHub Actions runs the checks for pushes and pull requests. Browser visual review remains a separate gate; see [validation limits](docs/MODEL.md#verification-and-remaining-limits).
 
 ## Architecture
 
-No build step — vanilla ES modules, three.js via CDN importmap.
-
 | File | Role |
 | --- | --- |
-| `js/physics.js` | Pure SI physics, no rendering imports — runs in Node for validation |
-| `js/catalog.js` | Documented Earth impacts + what-if NEOs, grouped by era |
-| `js/effects.js` | GPU ejecta (stateless ballistics in the vertex shader), multi-front shockwaves, debris ring, planet chunks |
-| `js/main.js` | Scene, impact sequence state machine, camera director, timeline scrubbing |
-| `js/ui.js` | Control panel, catalog, readouts, observer panel |
+| `js/physics.js` | Validated SI input boundary, entry, cratering, observer effects and collision scaling |
+| `js/assessment.js` | Model provenance, assumptions, sensitivity samples and portable JSON reports |
+| `js/app.js` | Calculation-first startup and optional 3D loading |
+| `js/catalog.js` | Historical and hypothetical scenario assumptions |
+| `js/ui.js` | Exact inputs, validation, readouts, comparisons and export |
+| `js/main.js` | Optional Three.js scene, camera, launch/replay state |
+| `js/effects.js` | Cinematic particles, waves, craters and debris effects |
 
-Physics readouts are exact SI; the animation runs on a labeled cinematic time-lapse so planetary-scale ballistics read at human speed.
+The scientific baseline is [Collins, Melosh & Marcus (2005)](https://doi.org/10.1111/j.1945-5100.2005.tb00157.x), with [Collins et al. (2017)](https://doi.org/10.1111/maps.12873) informing airburst assumptions. Giant-impact scaling references [Leinhardt & Stewart (2012)](https://doi.org/10.1088/0004-637X/745/1/79) and [Genda et al. (2012)](https://arxiv.org/abs/1109.4330). This implementation's documented deviations and heuristics are part of the assessment, not hidden calibration.
