@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EARTH, computeImpact } from './physics.js';
+import { visualEffectsProfile } from './visual-model.js';
 import {
   UNIT, glowTexture, makeStarfield, makeAtmosphere, makeHeatShell,
   Flash, ShockWaves, Ejecta, DebrisRing, ChunkBurst, Trail,
@@ -307,6 +308,9 @@ const sim = {
   lastScale: 1,
   heatFrontArc: 0,      // how far the ignition front has swept (radians)
   heatFrontSpeed: 0,
+  heatFrontMax: 0,
+  heatDuration: 0,
+  globalMelt: false,
   moonForming: null,    // {at, growDur, finalR, orbitR, angle0, omega, ...}
   startWorld: new THREE.Vector3(),
   velDir: new THREE.Vector3(),
@@ -410,6 +414,9 @@ function clearRun() {
   heatShell.material.uniforms.uFrontArc.value = 0;
   sim.heatFrontArc = 0;
   sim.heatFrontSpeed = 0;
+  sim.heatFrontMax = 0;
+  sim.heatDuration = 0;
+  sim.globalMelt = false;
   dustShell.visible = false;
   dustShell.material.uniforms.uOpacity.value = 0;
   sim.dustTarget = 0;
@@ -449,6 +456,7 @@ function onContact() {
   const Nw = Pw.clone().normalize();
   const logMt = Math.log10(Math.max(res.energyMt, 1e-3));
   const strength = THREE.MathUtils.clamp((logMt + 1) / 8, 0.06, 3);
+  const visuals = visualEffectsProfile(res);
 
   impactor.visible = res.regime !== 'giant' ? false : true;
 
@@ -528,13 +536,16 @@ function onContact() {
     }
 
     if (res.crater) paintCrater(sim.impactLocal, (res.crater.Dfr / 2) / EARTH.radius);
-    if (res.severity.level >= 2) {
-      sim.emissiveHeat = Math.min(0.55, 0.18 * (res.severity.level - 1));
-      // Firestorm front sweeps out from ground zero (~14 s to wrap).
+    if (visuals.heat > 0) {
+      sim.emissiveHeat = visuals.heat;
+      sim.heatFrontMax = visuals.thermalArc;
+      sim.heatDuration = visuals.heatDuration;
+      sim.globalMelt = false;
+      // The thermal footprint expands only to the modelled burn radius.
       heatShell.material.uniforms.uImpactDir.value.copy(sim.impactLocal);
-      sim.heatFrontSpeed = Math.PI / 14;
+      sim.heatFrontSpeed = Math.max(0.025, visuals.thermalArc / 4.5);
     }
-    if (res.severity.level >= 3) sim.dustTarget = 0.18 + 0.09 * (res.severity.level - 3);
+    sim.dustTarget = visuals.dust;
     ui.setPhase(res.waterDepth > 0 ? 'Ocean impact · illustrative effects' : 'Impact · illustrative effects');
     updateTimelineEvents(now);
     return;
@@ -562,7 +573,10 @@ function onContact() {
     life: 40,
   });
   paintCrater(sim.impactLocal, Math.min(1.2, 0.35 + g.gamma * 2));
-  sim.emissiveHeat = g.magmaOcean ? 1 : 0.6;
+  sim.emissiveHeat = visuals.heat;
+  sim.heatFrontMax = visuals.thermalArc;
+  sim.heatDuration = visuals.heatDuration;
+  sim.globalMelt = true;
   heatShell.material.uniforms.uImpactDir.value.copy(sim.impactLocal);
   sim.heatFrontSpeed = Math.PI / 7;   // mantle-melt front wraps in ~7 s
 
@@ -806,18 +820,21 @@ function advance(rawDt) {
     // Ignition front sweeps outward from ground zero; the planet only glows
     // uniformly once the front has wrapped the globe.
     if (sim.emissiveHeat > 0) {
-      // Overshoot by the shader's fade width so the sweep fully closes at the
-      // antipode instead of leaving a permanent cool hole.
-      sim.heatFrontArc = Math.min(Math.PI + 0.35, sim.heatFrontArc + sim.heatFrontSpeed * dt);
-      const frac = Math.min(1, sim.heatFrontArc / Math.PI);
-      const ramp = Math.min(1, sim.t / 4);
-      const lvl = sim.emissiveHeat * ramp;
-      const uni = lvl * frac ** 1.3;   // base-material glow follows the swept area
+      // Stop at the physical footprint; giant profiles include a small shader
+      // fade-width overshoot so their genuinely global sweep closes cleanly.
+      sim.heatFrontArc = Math.min(sim.heatFrontMax, sim.heatFrontArc + sim.heatFrontSpeed * dt);
+      const frac = Math.min(1, sim.heatFrontArc / Math.max(sim.heatFrontMax, 1e-6));
+      const ramp = Math.min(1, sim.t / 1.2);
+      const cooling = Math.max(0, 1 - Math.max(0, sim.t - 3) / Math.max(sim.heatDuration, 1));
+      const lvl = sim.emissiveHeat * ramp * cooling;
+      // Only mantle-scale outcomes alter the base material globally. Ordinary
+      // impacts are represented by their localized surface footprint alone.
+      const uni = sim.globalMelt ? lvl * Math.min(1, sim.heatFrontArc / Math.PI) ** 1.3 : 0;
       planetMat.emissive.setRGB(uni, uni * 0.25, uni * 0.05);
       heatShell.material.uniforms.uFrontArc.value = sim.heatFrontArc;
       heatShell.material.uniforms.uOpacity.value = 0.55 * lvl;
       heatShell.visible = lvl > 0.02;
-      if (sim.emissiveHeat > 0.3) {
+      if (sim.globalMelt && sim.emissiveHeat > 0.3) {
         clouds.material.opacity = Math.max(0, clouds.material.opacity - dt * 0.12 * (0.3 + frac));
       }
     }
