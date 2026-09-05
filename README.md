@@ -12,7 +12,7 @@ Serve this directory over HTTP; no build step is needed:
 python3 -m http.server 8742
 ```
 
-Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URLs. If the 3D module or graphics initialization fails, numerical controls, comparisons and report export remain available.
+Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URLs. If the 3D module, graphics initialization, rendering frame or WebGL context fails, numerical controls, comparisons and report export remain available. The unavailable 3D controls are disabled; reload to retry graphics. Export custom inputs before reloading.
 
 ## Assess a scenario
 
@@ -21,7 +21,7 @@ Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URL
 - Enter observer distance to inspect pressure, heat, shaking, ejecta and illustrative open-water amplitude where the model supports them.
 - Expand model assumptions and the three-scenario diameter sensitivity comparison. Sensitivity samples are not confidence intervals.
 - Export JSON to preserve exact inputs, model version, sources, assumptions and observer results. Compare up to four scenarios.
-- Launch and scrub the 3D illustration. Animation time, sizes and wave fronts are cinematic, not geographical hazard boundaries.
+- Launch and scrub the 3D illustration. Pause freezes the automatic camera; manual orbit remains available. Hidden tabs suspend rendering without fast-forwarding on return. Reduced-motion preferences default to a free camera; the cinematic camera can still be explicitly enabled. Animation time, sizes and wave fronts are cinematic, not geographical hazard boundaries.
 
 Share an unmodified catalog preset with `?p=bennu`, `?p=ries`, `?p=theia`, etc. Custom input changes clear the preset URL; use JSON export to preserve custom scenarios.
 
@@ -45,7 +45,8 @@ Tests include published calculation examples, conservation and boundary checks, 
 | --- | --- |
 | `js/physics.js` | Validated SI input boundary, entry, cratering, observer effects and collision scaling |
 | `js/assessment.js` | Model provenance, assumptions, sensitivity samples and portable JSON reports |
-| `js/app.js` | Calculation-first startup and optional 3D loading |
+| `js/app.js`, `js/startup.js` | Entry point, calculation-first startup and optional 3D failure handling |
+| `js/scene-runtime.js` | Frame scheduling, background suspension and context-loss boundary |
 | `js/catalog.js` | Historical and hypothetical scenario assumptions |
 | `js/ui.js` | Exact inputs, validation, readouts, comparisons and export |
 | `js/main.js` | Optional Three.js scene, camera, launch/replay state |

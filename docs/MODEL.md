@@ -68,6 +68,22 @@ The ±10% diameter comparison is three deterministic samples with all other inpu
 
 DOM tests do not verify WebGL rendering or CSS layout. Desktop/mobile visual review, live-CDN startup, launch/replay across regimes, and WebGL-unavailable behavior need a real browser before merge. The implementation session's browser blocked the local preview; renderer-import failure was verified with the DOM harness.
 
+## Renderer reliability follow-up
+
+Backward replay previously let an older launch replace a newer scenario’s readouts and export inputs. Forecast updates now reject results that do not match the current valid form, using the same guard as contact-time results. A regression test reproduces the stale replay and checks that exported values and preset attribution remain current.
+
+The optional scene now stops on a rendering-frame exception or WebGL context loss. Its animation controls and timeline become unavailable while exact inputs, comparisons, sensitivity and JSON exports remain usable. Context restoration does not silently resume a failed scene; reload to retry after exporting custom inputs. Hidden tabs suspend the frame loop and reset its time baseline on return. Pause stops the automatic camera; reduced-motion preferences default to a free camera on startup and launch.
+
+Additional tests exercise context-loss events, frame exceptions, initialization failure, cleanup, background suspension and continued editing/export after failure. These use controlled frame callbacks and jsdom; they do not establish GPU rendering or browser layout correctness. The follow-up browser again rejected the local preview with `ERR_BLOCKED_BY_CLIENT`.
+
+Remaining real-browser checks:
+- Desktop and narrow-screen layout, input reachability and timeline/comparison overlap.
+- Live CDN/WebGL startup and launch/replay for airburst, crater, ocean and giant scenarios, including PR #3's localized thermal visuals.
+- Actual unavailable/lost WebGL contexts, visible fallback status and working export afterward.
+- Pause/free-camera behavior, reduced-motion preference changes, and background-tab return.
+
+Browser lifecycle references: [context loss](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/webglcontextlost_event), [visibility changes](https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event).
+
 ## Next scientific work
 
 1. Add primary sources and explicit parameter ranges for every catalog preset; distinguish measured structure diameter from reconstructed original crater size.

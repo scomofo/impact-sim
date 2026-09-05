@@ -110,6 +110,7 @@ test('a completed launch does not overwrite a newer forecast or validation error
   ui.showResults(old);
   assert.equal(el('readouts').innerHTML, current);
   input('dia-input', '');
+  ui.setForecast(computeImpact(latest), 1);
   ui.showResults(computeImpact(latest));
   assert.match(el('readout-title').textContent, /Last valid/);
 });
@@ -124,8 +125,14 @@ test('unresolved seafloor assessment can be displayed, pinned and removed', () =
   assert.equal(el('compare-tray').children.length, 0);
 });
 
-test('JSON download contains the displayed exact scenario and observer distance', async () => {
+test('replaying an earlier launch cannot replace the current scenario in JSON export', async () => {
+  clickEvent('barringer');
+  const earlierLaunch = computeImpact(latest);
   clickEvent('apophis'); input('obs-input', 12.345);
+  const currentReadout = el('readouts').innerHTML;
+  ui.setForecast(earlierLaunch, 1); // backward scrubbing re-enters launch()
+  ui.showResults(earlierLaunch);
+  assert.equal(el('readouts').innerHTML, currentReadout);
   const originalCreate = URL.createObjectURL, originalRevoke = URL.revokeObjectURL;
   let exportedBlob, downloadName;
   URL.createObjectURL = (blob) => { exportedBlob = blob; return 'blob:test'; };
