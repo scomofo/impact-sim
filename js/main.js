@@ -8,11 +8,12 @@ import {
   UNIT, glowTexture, makeStarfield, makeAtmosphere, makeHeatShell,
   Flash, ShockWaves, Ejecta, DebrisRing, ChunkBurst, Trail,
 } from './effects.js';
-import { initUI } from './ui.js';
 
 const R = EARTH.radius / UNIT; // planet radius in scene units (6.371)
 const MIN_VISUAL = 0.03;       // minimum impactor visual radius (scene units)
 const APPROACH_TIME = 5.5;     // seconds of cinematic approach
+
+export function initScene(ui) {
 
 // Planet-local: +Y north pole, +X Greenwich, +Z 90°E.
 function latLonToDir(lat, lon) {
@@ -28,13 +29,13 @@ function latLonToDir(lat, lon) {
 // --- renderer / scene -------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(window.innerWidth, document.getElementById('scene').clientHeight || window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 document.getElementById('scene').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 9000);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / (document.getElementById('scene').clientHeight || window.innerHeight), 0.01, 9000);
 camera.position.set(0, 5, 19);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -466,9 +467,9 @@ function onContact() {
 
     // Three physical wave fronts, at their real relative order: fireball flash,
     // then the seismic ring racing ahead of the slower air blast.
-    const reach = res.burn ?? res.crater.Dfr * 3;
+    const reach = res.burn ?? (res.waterCrater ?? res.crater?.Dfr ?? 0) * 3;
     const burnArc = THREE.MathUtils.clamp(reach / EARTH.radius, 0.04, Math.PI);
-    const fireArc = THREE.MathUtils.clamp((res.fireball ?? res.crater.Dfr) / EARTH.radius, 0.015, Math.PI);
+    const fireArc = THREE.MathUtils.clamp((res.fireball ?? res.waterCrater ?? res.crater?.Dfr ?? 0) / EARTH.radius, 0.015, Math.PI);
     const quakeArc = THREE.MathUtils.clamp(burnArc * (2 + res.severity.level), 0.12, Math.PI);
     const fronts = [
       { speed: fireArc / 1.1, maxArc: fireArc, width: Math.max(0.012, fireArc * 0.3), peak: 1.0, tail: 1.2 },
@@ -491,32 +492,34 @@ function onContact() {
 
     // Ejecta curtain with physically-scaled launch speeds: v ~ sqrt(g * Rc),
     // fastest streaks capped at a fraction of the impact speed.
-    const Rc = res.crater.Dtc / 2;
-    const vScale = Math.sqrt(EARTH.g * Rc);
-    const Dkm = res.crater.Dfr / 1000;
-    ejecta.spawn(Pw, Nw, now, {
-      count: Math.round(THREE.MathUtils.clamp(4000 + 9000 * Math.log10(Dkm + 1), 2500, 34000)),
-      vMin: 0.4 * vScale,
-      vMax: Math.min(8 * vScale, 0.4 * res.vSurface),
-      spread: 0.85,
-      curtainBias: 0.65,
-      hotFrac: res.vSurface >= 12000 ? 0.55 : 0.25,
-      sizeScale: THREE.MathUtils.clamp(0.6 + Dkm / 250, 0.6, 2.4),
-      life: 18 + Math.min(22, Dkm / 15),
-    });
+    if (res.crater) {
+      const Rc = res.crater.Dtc / 2;
+      const vScale = Math.sqrt(EARTH.g * Rc);
+      const Dkm = res.crater.Dfr / 1000;
+      ejecta.spawn(Pw, Nw, now, {
+        count: Math.round(THREE.MathUtils.clamp(4000 + 9000 * Math.log10(Dkm + 1), 2500, 34000)),
+        vMin: 0.4 * vScale,
+        vMax: Math.min(8 * vScale, 0.4 * res.vSurface),
+        spread: 0.85,
+        curtainBias: 0.65,
+        hotFrac: res.vSurface >= 12000 ? 0.55 : 0.25,
+        sizeScale: THREE.MathUtils.clamp(0.6 + Dkm / 250, 0.6, 2.4),
+        life: 18 + Math.min(22, Dkm / 15),
+      });
 
-    // Fallback debris: schedule secondary strikes around big craters.
-    if (Dkm > 40) {
-      const craterArc = (res.crater.Dfr / 2) / EARTH.radius;
-      const n = 4 + Math.floor(Math.random() * 3);
-      for (let i = 0; i < n; i++) {
-        sim.secondaries.push({
-          at: now + 2.5 + Math.random() * 6,
-          localDir: offsetOnSphere(sim.impactLocal, craterArc * (1.5 + Math.random() * 2.5)),
-          scale: 0.2 + Math.random() * 0.35,
-        });
+      // Fallback debris: schedule secondary strikes around big craters.
+      if (Dkm > 40) {
+        const craterArc = (res.crater.Dfr / 2) / EARTH.radius;
+        const n = 4 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < n; i++) {
+          sim.secondaries.push({
+            at: now + 2.5 + Math.random() * 6,
+            localDir: offsetOnSphere(sim.impactLocal, craterArc * (1.5 + Math.random() * 2.5)),
+            scale: 0.2 + Math.random() * 0.35,
+          });
+        }
+        sim.secondaries.sort((a, b) => a.at - b.at);
       }
-      sim.secondaries.sort((a, b) => a.at - b.at);
     }
 
     // Big quakes converge at the antipode.
@@ -524,7 +527,7 @@ function onContact() {
       sim.antipodeAt = now + 0.25 + Math.PI / (quakeArc / 7);
     }
 
-    paintCrater(sim.impactLocal, (res.crater.Dfr / 2) / EARTH.radius);
+    if (res.crater) paintCrater(sim.impactLocal, (res.crater.Dfr / 2) / EARTH.radius);
     if (res.severity.level >= 2) {
       sim.emissiveHeat = Math.min(0.55, 0.18 * (res.severity.level - 1));
       // Firestorm front sweeps out from ground zero (~14 s to wrap).
@@ -532,7 +535,7 @@ function onContact() {
       sim.heatFrontSpeed = Math.PI / 14;
     }
     if (res.severity.level >= 3) sim.dustTarget = 0.18 + 0.09 * (res.severity.level - 3);
-    ui.setPhase('Impact! Crater forming');
+    ui.setPhase(res.waterDepth > 0 ? 'Ocean impact · illustrative effects' : 'Impact · illustrative effects');
     updateTimelineEvents(now);
     return;
   }
@@ -710,14 +713,7 @@ controls.addEventListener('start', () => {
 });
 
 // --- UI wiring --------------------------------------------------------------
-const ui = initUI({
-  onChange(params) {
-    // Always live-update the forecast — even mid-run the sliders describe the
-    // NEXT launch, and the panel title says "forecast".
-    const res = computeImpact(params);
-    const vr = impactorVisualRadius(params.diameter);
-    ui.setForecast(res, vr / Math.max((params.diameter / 2) / UNIT, 1e-12));
-  },
+const handlers = {
   onLaunch(params) { launch(params); },
   onResetPlanet() { resetPlanet(); },
   onTimeScale(v) {
@@ -739,7 +735,7 @@ const ui = initUI({
     sim.impactLocal.copy(latLonToDir(lat, lon));
     updateMarkers();
   },
-});
+};
 updateMarkers();
 
 // Quick click (not a drag) on the planet moves ground zero while idle.
@@ -755,12 +751,13 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   downAt = null;
   if (moved || slow || sim.state !== 'idle') return;
   const ndc = new THREE.Vector2(
-    (e.clientX / window.innerWidth) * 2 - 1,
-    -(e.clientY / window.innerHeight) * 2 + 1,
+    ((e.clientX - renderer.domElement.getBoundingClientRect().left) / renderer.domElement.clientWidth) * 2 - 1,
+    -((e.clientY - renderer.domElement.getBoundingClientRect().top) / renderer.domElement.clientHeight) * 2 + 1,
   );
   raycaster.setFromCamera(ndc, camera);
   const hit = raycaster.intersectObject(planet, false)[0];
   if (!hit) return;
+  ui.clearEvent();
   sim.impactLocal.copy(planetGroup.worldToLocal(hit.point.clone())).normalize();
   updateMarkers();
 });
@@ -924,13 +921,17 @@ tick();
 window.__sim = { sim, advance, launch, resetPlanet, scrubTo, moon, camera };
 
 function updatePixScale() {
-  ejecta.setPixScale(window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)));
+  ejecta.setPixScale(renderer.domElement.clientHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)));
 }
 updatePixScale();
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const height = document.getElementById('scene').clientHeight || window.innerHeight;
+  camera.aspect = window.innerWidth / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(window.innerWidth, height);
   updatePixScale();
 });
+
+return handlers;
+}

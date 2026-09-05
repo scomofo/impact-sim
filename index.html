@@ -17,6 +17,7 @@
 </head>
 <body>
   <div id="scene"></div>
+  <div id="app-status" role="status">Loading assessment controls…</div>
 
   <header id="topbar">
     <div id="title">PLANETARY IMPACT SIMULATOR</div>
@@ -35,6 +36,7 @@
 
   <aside id="control-panel" class="panel">
     <h2>Impactor</h2>
+    <p class="model-intro">Scenario estimates · cinematic 3D view</p>
     <div id="presets"></div>
     <div id="event-note" hidden></div>
     <div id="city-bar" hidden>
@@ -43,42 +45,67 @@
     <div class="ctl">
       <label for="dia-slider">Diameter <span id="dia-val" class="ctl-val"></span></label>
       <input type="range" id="dia-slider" min="0" max="1000" step="1" value="620" aria-label="Impactor diameter">
+      <label for="dia-input">Exact diameter (m)</label>
+      <input type="number" id="dia-input" min="10" max="7420000" step="any" value="1000" required>
     </div>
     <div class="ctl">
-      <label for="vel-slider">Velocity <span id="vel-val" class="ctl-val"></span></label>
-      <input type="range" id="vel-slider" min="5" max="72" step="0.5" value="20" aria-label="Impact velocity">
+      <label for="vel-slider">Incoming speed <span id="vel-val" class="ctl-val"></span></label>
+      <input type="range" id="vel-slider" min="5" max="72" step="0.1" value="20" aria-label="Incoming velocity">
+      <label for="vel-input">Exact speed (km/s)</label>
+      <input type="number" id="vel-input" min="5" max="72" step="any" value="20" required>
     </div>
     <div class="ctl">
       <label for="ang-slider">Impact angle <span id="ang-val" class="ctl-val"></span></label>
       <input type="range" id="ang-slider" min="5" max="90" step="1" value="45" aria-label="Impact angle">
+      <label for="ang-input">From horizontal (degrees)</label>
+      <input type="number" id="ang-input" min="5" max="90" step="any" value="45" required>
     </div>
     <div class="ctl">
       <label for="comp-select">Composition</label>
       <select id="comp-select"></select>
+      <label for="density-input">Bulk density (kg/m³)</label>
+      <input type="number" id="density-input" min="500" max="8000" step="any" value="3000" required>
     </div>
     <div class="ctl">
       <label for="target-select">Target terrain</label>
       <select id="target-select"></select>
     </div>
-    <div class="ctl-note">click the planet to move ground zero</div>
+    <div class="ctl" id="water-control" hidden>
+      <label for="water-input">Water depth (m)</label>
+      <input type="number" id="water-input" min="0" max="11000" step="any" value="0" required>
+    </div>
+    <div class="ctl-note">Map position is visual. Select terrain and water depth explicitly.</div>
+    <div id="input-error" role="alert" hidden></div>
     <button id="launch-btn" class="btn launch">LAUNCH</button>
     <div id="exag-note"></div>
   </aside>
 
   <aside id="readout-panel" class="panel">
     <div id="readout-head">
-      <h2 id="readout-title">Impact forecast</h2>
+      <h2 id="readout-title">Scenario estimate</h2>
       <button id="pin-btn" class="btn small" title="Pin to the comparison tray">+ compare</button>
     </div>
     <div id="readouts"></div>
+    <details id="model-details">
+      <summary>Model assumptions &amp; limits</summary>
+      <div id="model-notes"></div>
+    </details>
+    <details id="sensitivity-details">
+      <summary>Diameter sensitivity ±10%</summary>
+      <p class="model-intro">Three scenarios with other inputs fixed; not a confidence interval. Clipped at input limits.</p>
+      <div id="sensitivity-readouts"></div>
+    </details>
     <div id="observer-section">
-      <h2>You are standing…</h2>
+      <h2>Observer effects</h2>
       <div class="ctl">
-        <label>Distance from ground zero <span id="obs-val" class="ctl-val"></span></label>
+        <label for="obs-slider">Distance from ground zero <span id="obs-val" class="ctl-val"></span></label>
         <input type="range" id="obs-slider" min="0" max="1000" step="1" value="627">
+        <label for="obs-input">Exact distance (km)</label>
+        <input type="number" id="obs-input" min="0" max="20015.086796020572" step="any" value="500" required>
       </div>
       <div id="observer-readouts"></div>
     </div>
+    <button id="export-btn" class="btn">Export assessment JSON</button>
   </aside>
 
   <div id="compare-tray"></div>
@@ -94,6 +121,7 @@
 
   <div id="hint">drag to orbit · scroll to zoom · pick an impact from the catalog, or dial in your own</div>
 
-  <script type="module" src="js/main.js"></script>
+  <noscript>This app needs JavaScript to calculate an assessment.</noscript>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
