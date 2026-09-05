@@ -52,7 +52,7 @@ test('each preset retains exact numerical parameters through launch', () => {
 test('editing a field preserves other exact values and clears the preset URL', () => {
   clickEvent('apophis');
   input('ang-input', 44.75);
-  assert.equal(latest.diameter, 370);
+  assert.equal(latest.diameter, 340);
   assert.equal(latest.velocity, 12600);
   assert.equal(latest.angleDeg, 44.75);
   assert.equal(new URL(dom.window.location.href).searchParams.has('p'), false);
@@ -133,6 +133,10 @@ test('replaying an earlier launch cannot replace the current scenario in JSON ex
   ui.setForecast(earlierLaunch, 1); // backward scrubbing re-enters launch()
   ui.showResults(earlierLaunch);
   assert.equal(el('readouts').innerHTML, currentReadout);
+  el('sensitivity-param').value = 'velocity';
+  el('sensitivity-param').dispatchEvent(new dom.window.Event('change'));
+  el('sensitivity-span').value = '0.2';
+  el('sensitivity-span').dispatchEvent(new dom.window.Event('change'));
   const originalCreate = URL.createObjectURL, originalRevoke = URL.revokeObjectURL;
   let exportedBlob, downloadName;
   URL.createObjectURL = (blob) => { exportedBlob = blob; return 'blob:test'; };
@@ -141,10 +145,13 @@ test('replaying an earlier launch cannot replace the current scenario in JSON ex
   try {
     el('export-btn').click();
     const report = JSON.parse(await exportedBlob.text());
-    assert.equal(report.inputs.diameter, 370);
+    assert.equal(report.inputs.diameter, 340);
     assert.equal(report.inputs.velocity, 12600);
     assert.equal(report.observerDistance, 12345);
     assert.equal(report.event.id, 'apophis');
+    assert.equal(report.sensitivity.selectedParameter, 'velocity');
+    assert.equal(report.sensitivity.fraction, 0.2);
+    assert.equal(report.event.evidence.parameters.diameter.status, 'estimated');
     assert.match(downloadName, /^impact-assessment-.*\.json$/);
   } finally {
     URL.createObjectURL = originalCreate; URL.revokeObjectURL = originalRevoke;
@@ -164,4 +171,23 @@ test('HTML has labels and explicit units for every assessment numeric input', ()
     assert.ok(field.labels.length > 0, field.id);
     assert.ok(field.required, field.id);
   }
+});
+
+
+test('sensitivity selectors change the comparison without modifying the scenario or attribution', () => {
+  clickEvent('apophis');
+  const before = { ...latest };
+  el('sensitivity-param').value = 'velocity';
+  el('sensitivity-param').dispatchEvent(new dom.window.Event('change'));
+  el('sensitivity-span').value = '0.2';
+  el('sensitivity-span').dispatchEvent(new dom.window.Event('change'));
+  assert.match(el('sensitivity-readouts').textContent, /10.08/);
+  assert.match(el('sensitivity-readouts').textContent, /15.12/);
+  assert.deepEqual(latest, before);
+  assert.equal(new URL(dom.window.location.href).searchParams.get('p'), 'apophis');
+  input('dia-input', '');
+  assert.equal(el('sensitivity-param').disabled, true);
+  input('dia-input', 340);
+  assert.equal(el('sensitivity-param').disabled, false);
+  assert.equal(el('sensitivity-span').value, '0.2');
 });

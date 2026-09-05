@@ -64,7 +64,7 @@ Reference comparisons use the **paper's** Table 6 inputs, not today's catalog re
 
 These checks validate selected calculations, not the entire scientific model. Known discrepancies are not tuned away: the 1.75 km ejecta thickness is ~0.081 m versus the table's ~0.09 m; the 18 km pressure from the implemented equations is ~13.1 MPa versus the table's ~7.7 MPa. Large-yield blast output is flagged as extrapolated. Catalog fits can be much worse, including an airburst for some observed crater presets; measured and reconstructed crater definitions also differ.
 
-The ±10% diameter comparison is three deterministic samples with all other inputs fixed. It is **not** a confidence interval, probabilistic forecast, or guaranteed minimum/maximum across a parameter range.
+The input sensitivity comparison supports diameter, speed, density and angle. Each analysis has lower, nominal and upper samples with all other inputs fixed. Relative perturbations can be ±5%, ±10%, ±20% or ±50%; requested and clipped values are recorded. Angle perturbations are relative percentages, not added degrees. This is **not** joint multivariate uncertainty, a confidence interval, a probabilistic forecast, or guaranteed extrema. Input distributions and correlations are not modeled.
 
 DOM tests do not verify WebGL rendering or CSS layout. Desktop/mobile visual review, live-CDN startup, launch/replay across regimes, and WebGL-unavailable behavior need a real browser before merge. The implementation session's browser blocked the local preview; renderer-import failure was verified with the DOM harness.
 
@@ -91,3 +91,12 @@ Browser lifecycle references: [context loss](https://developer.mozilla.org/en-US
 3. Replace the tsunami illustration with a validated bathymetric propagation model if coastal hazard is a product requirement.
 4. Validate giant-impact regime boundaries and remnant predictions against numerical datasets; keep speculative disk/spin outcomes separate.
 5. Add multivariate sensitivity with documented input distributions only when there is evidence to support those distributions.
+
+
+## Evidence dashboard and report schema 2
+
+[The benchmark dashboard](../benchmarks.html) recomputes three fixed Table 6 examples, rather than comparing an arbitrary edited scenario with an unrelated reference. SI conversions use 1 bar = 100,000 Pa, 1 km = 1,000 m and 1 MJ = 1,000,000 J. Signed difference is 100 × (model − reference) / |reference|; missing and zero reference values do not produce a percentage. A 3% display tolerance flags differences for review and is not an empirical uncertainty bound. There is no aggregate accuracy score. The paper's examples test consistency with a related analytical model, not independent event validation.
+
+Schema 2 adds catalog version, scoped event evidence, `referenceCraterKm`, selected sensitivity settings and four analyses. `observedCraterKm` is retained as a legacy alias for the reference structure estimate; consult `event.evidence.craterDefinition` before interpreting it as an observed original rim. The legacy `sensitivity.scenarios` array still contains diameter samples at the requested fraction. Each analysis declares the unit of its numeric values; display conversions are separate. The physical model remains version 0.2.0; catalog and application versions are separate.
+
+The new dashboard has DOM coverage for filtering, recalculation, discrepancy labels and JSON export. Browser access to localhost was again blocked; dashboard responsive layout and existing simulator WebGL checks remain pending.
