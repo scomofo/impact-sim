@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Model benchmarks · Impact simulator</title><link rel="stylesheet" href="css/benchmarks.css"><link rel="icon" href="data:,"></head>
+<body><main>
+<nav><a href="index.html">← Impact simulator</a></nav>
+<header><p class="eyebrow">MODEL EVIDENCE</p><h1>How closely do the calculations agree?</h1><p>Compare fixed published examples with results calculated by the current model. These examples are separate from the scenario you are editing.</p></header>
+<section class="scope"><h2>Read this comparison correctly</h2><p>These are selected outputs from Collins, Melosh &amp; Marcus (2005), Table 6—not measurements of actual impacts. Agreement checks implementation consistency; it does not establish overall scientific accuracy.</p><p>The 3% display tolerance is a review aid for rounded references, not a scientific uncertainty bound. Positive differences mean the model is higher. Missing values are not zero.</p><p><a href="https://adsabs.harvard.edu/pdf/2005M%26PS...40..817C#page=18">Open the reference table</a> · <a href="docs/MODEL.md">Methods and limitations</a></p></section>
+<div class="toolbar"><label for="benchmark-filter">Example <select id="benchmark-filter"><option value="all">All three examples</option></select></label><button id="benchmark-run">Recalculate</button><button id="benchmark-export">Export all benchmark JSON</button></div>
+<p id="benchmark-status" role="status"></p><div id="benchmark-results"></div>
+<section class="scope"><h2>Evidence still needed</h2><p>These benchmarks do not validate airbursts, coastal waves, giant-impact outcomes or historical preset reconstructions. Known ejecta and large-yield blast differences remain visible. No physics parameters have been tuned to make this page pass.</p></section>
+<noscript>Enable JavaScript to calculate and display the comparisons.</noscript>
+</main><script type="module" src="js/benchmark-page.js"></script></body></html>

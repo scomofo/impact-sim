@@ -19,13 +19,21 @@ Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URL
 - Choose a catalog event or enter exact diameter, speed, angle and density. Preset values survive slider rounding. Speed is before atmospheric entry; angle is above horizontal.
 - Select target terrain and, for water impacts, water depth. Clicking the globe changes a visual marker; it does not look up terrain or population.
 - Enter observer distance to inspect pressure, heat, shaking, ejecta and illustrative open-water amplitude where the model supports them.
-- Expand model assumptions and the three-scenario diameter sensitivity comparison. Sensitivity samples are not confidence intervals.
+- Expand model assumptions and input sensitivity. Vary diameter, speed, density or angle at ±5%, ±10%, ±20% or ±50%, one input at a time. Clipped samples are labeled; these are not confidence intervals.
 - Export JSON to preserve exact inputs, model version, sources, assumptions and observer results. Compare up to four scenarios.
 - Launch and scrub the 3D illustration. Pause freezes the automatic camera; manual orbit remains available. Hidden tabs suspend rendering without fast-forwarding on return. Reduced-motion preferences default to a free camera; the cinematic camera can still be explicitly enabled. Animation time, sizes and wave fronts are cinematic, not geographical hazard boundaries.
 
 Share an unmodified catalog preset with `?p=bennu`, `?p=ries`, `?p=theia`, etc. Custom input changes clear the preset URL; use JSON export to preserve custom scenarios.
 
 Catalog values are illustrative rather than fitted historical reconstructions. When a reference crater diameter exists, the app shows it beside the calculated result so disagreement is visible. Updated source notes include Hiawatha's age, Nadir's inferred water depth and the time window of NASA's 2021 Bennu risk estimate.
+
+## Inspect the evidence
+
+Open [Model benchmarks](benchmarks.html) for three published examples, live model outputs, signed percentage differences and exportable comparison data. The 3% display tolerance is a review aid, not a claim of scientific accuracy. Known ejecta and large-impact blast discrepancies remain visible.
+
+Every catalog event has scoped source links and a per-input evidence breakdown. An observed structure does not establish the projectile's diameter, density, speed or trajectory. See [catalog provenance](docs/CATALOG.md) for corrections and remaining evidence gaps.
+
+Assessment JSON now uses schema 2, with catalog provenance and all four one-at-a-time sensitivity analyses. The original diameter `sensitivity.scenarios` array remains available; `selectedParameter` records the displayed comparison and `fraction` records the chosen relative perturbation. Numeric sample values stay in SI units (angles in degrees), with separate display conversion metadata.
 
 ## Development checks
 
@@ -47,7 +55,8 @@ Tests include published calculation examples, conservation and boundary checks, 
 | `js/assessment.js` | Model provenance, assumptions, sensitivity samples and portable JSON reports |
 | `js/app.js`, `js/startup.js` | Entry point, calculation-first startup and optional 3D failure handling |
 | `js/scene-runtime.js` | Frame scheduling, background suspension and context-loss boundary |
-| `js/catalog.js` | Historical and hypothetical scenario assumptions |
+| `js/catalog.js`, `js/catalog-evidence.js` | Historical/hypothetical scenarios and scoped input provenance |
+| `js/benchmarks.js`, `js/benchmark-page.js` | Published reference comparisons and dashboard |
 | `js/ui.js` | Exact inputs, validation, readouts, comparisons and export |
 | `js/main.js` | Optional Three.js scene, camera, launch/replay state |
 | `js/effects.js` | Cinematic particles, waves, craters and debris effects |

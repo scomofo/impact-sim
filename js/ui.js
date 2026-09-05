@@ -1,6 +1,6 @@
 // ui.js — control panel, presets, and physics readouts. No framework.
 import { COMPOSITIONS, TARGETS, MAX_DISTANCE, observerReport } from './physics.js';
-import { MODEL_VERSION, SOURCES, modelNotes, diameterSensitivity, createAssessmentReport } from './assessment.js';
+import { MODEL_VERSION, SOURCES, modelNotes, parameterSensitivity, SENSITIVITY_PARAMETERS, createAssessmentReport } from './assessment.js';
 import { CATALOG, CITIES, ERA_LABELS, ERA_ORDER, eventById } from './catalog.js';
 
 const $ = (id) => document.getElementById(id);
@@ -244,10 +244,10 @@ export function initUI(handlers) {
   function setEventNote(p) {
     if (!p) { eventNote.hidden = true; eventNote.innerHTML = ''; return; }
     const crater = p.craterKm != null
-      ? ` · observed crater estimate ${p.craterKm < 1 ? (p.craterKm * 1000).toFixed(0) + ' m' : p.craterKm + ' km'}`
+      ? ` · reference structure estimate ${p.craterKm < 1 ? (p.craterKm * 1000).toFixed(0) + ' m' : p.craterKm + ' km'}`
       : '';
     eventNote.hidden = false;
-    eventNote.innerHTML = `<strong>${p.name}</strong> · ${p.when}<br>${p.where}${crater}<br>${p.blurb}<p class="model-intro">Preset inputs are illustrative, not a fitted reconstruction.</p>${(p.sources ?? []).map((source) => `<a href="${source.url}" target="_blank" rel="noopener noreferrer">${source.label}</a>`).join(' · ')}`;
+    eventNote.innerHTML = `<strong>${p.name}</strong> · ${p.when}<br>${p.where}${crater}<br>${p.blurb}<p class="model-intro">Preset inputs are illustrative, not a fitted reconstruction.</p><details><summary>Evidence and input assumptions</summary><p>${p.evidence.kind === 'hypothetical' ? 'Hypothetical scenario' : 'Historical event; scenario inputs are not a fitted reconstruction'}</p>${p.evidence.craterDefinition ? `<p>${p.evidence.craterDefinition}</p>` : ''}<ul>${Object.entries(p.evidence.parameters).map(([key, basis]) => `<li><strong>${({diameter: 'Diameter', velocity: 'Speed', density: 'Density', angleDeg: 'Angle', target: 'Target', waterDepth: 'Water depth'})[key]}</strong> · ${basis.status}<br>${basis.detail}</li>`).join('')}</ul><p>${p.evidence.note}</p><p>Catalog ${p.evidence.catalogVersion}</p></details>${(p.sources ?? []).map((source) => `<a href="${source.url}" target="_blank" rel="noopener noreferrer">${source.label}</a><small class="source-scope">${source.scope ?? ""}</small>`).join(' · ')}`;
   }
 
   function showCities(show) {
@@ -329,6 +329,8 @@ export function initUI(handlers) {
     $('input-error').textContent = bad ? `${bad.labels[0].textContent.trim()}: enter a value from ${bad.min} to ${bad.max}.` : '';
     $('export-btn').disabled = !inputsValid;
     $('pin-btn').disabled = !inputsValid;
+    $('sensitivity-param').disabled = !inputsValid;
+    $('sensitivity-span').disabled = !inputsValid;
     $('launch-btn').disabled = !inputsValid || !handlers.onLaunch;
     if (!inputsValid) $('readout-title').textContent = 'Last valid estimate · fix inputs';
     return inputsValid;
@@ -384,7 +386,7 @@ export function initUI(handlers) {
   $('export-btn').addEventListener('click', () => {
     if (!validateControls() || !lastRes) return;
     const report = createAssessmentReport(lastRes.inputs, Math.min(MAX_DISTANCE, Number(obsInput.value) * 1000),
-      { event: selectedId ? eventById(selectedId) : null });
+      { event: selectedId ? eventById(selectedId) : null, sensitivity: sensitivitySettings() });
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2) + '\n'], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url; link.download = `impact-assessment-${MODEL_VERSION}.json`;
@@ -468,15 +470,27 @@ export function initUI(handlers) {
   let hintTimer = null;
   const defaultHint = $('hint').textContent;
 
+  function sensitivitySettings() {
+    return { parameter: $('sensitivity-param').value, fraction: Number($('sensitivity-span').value) };
+  }
+  function renderSensitivity(res) {
+    const { parameter, fraction } = sensitivitySettings();
+    const spec = SENSITIVITY_PARAMETERS[parameter];
+    const cases = parameterSensitivity(res.inputs, parameter, fraction);
+    $('sensitivity-readouts').innerHTML = `<table><caption>${spec.label} varied ±${fraction * 100}% · other inputs fixed</caption><thead><tr><th scope="col">${spec.label} (${spec.displayUnit ?? spec.unit})</th><th scope="col">Energy (Mt)</th><th scope="col">Outcome</th></tr></thead><tbody>${cases.map((c) => `<tr><td>${Number((c.value * spec.displayScale).toPrecision(6))}${c.direction === 0 ? ' (nominal)' : ''}${c.clipped ? '<br>clipped to limit' : ''}</td><td>${sci(c.energyMt)}</td><td>${c.regime === 'airburst' ? 'airburst' : c.giantOutcome ?? (c.craterDiameter ? fmtLen(c.craterDiameter) + ' crater' : 'unresolved')}</td></tr>`).join('')}</tbody></table>`;
+  }
+  for (const id of ['sensitivity-param', 'sensitivity-span']) {
+    $(id).addEventListener('change', () => { if (validateControls() && lastRes) renderSensitivity(lastRes); });
+  }
+
   function refreshModel(res) {
     const notes = modelNotes(res);
     $('model-notes').innerHTML = `<p>Model ${MODEL_VERSION} · analytical estimates</p><ul>${notes.map((n) => `<li>${n.text}</li>`).join('')}</ul><p>${SOURCES.map((source) => `<a href="${source.url}" target="_blank" rel="noopener noreferrer">${source.label}</a>`).join('<br>')}</p>`;
-    const cases = diameterSensitivity(res.inputs);
-    $('sensitivity-readouts').innerHTML = `<table><thead><tr><th>Diameter</th><th>Energy (Mt)</th><th>Outcome</th></tr></thead><tbody>${cases.map((c) => `<tr><td>${fmtLen(c.diameter)}</td><td>${sci(c.energyMt)}</td><td>${c.regime === 'airburst' ? 'airburst' : c.giantOutcome ?? (c.craterDiameter ? fmtLen(c.craterDiameter) + ' crater' : 'unresolved')}</td></tr>`).join('')}</tbody></table>`;
+    renderSensitivity(res);
     const event = selectedId && eventById(selectedId);
     if (event?.craterKm != null) {
-      $('readouts').insertAdjacentHTML('beforeend', row('Observed crater estimate', fmtLen(event.craterKm * 1000)) +
-        row('', res.crater ? `model / observation ≈ ${(res.crater.Dfr / (event.craterKm * 1000)).toFixed(2)}; inputs are not calibrated` : 'this simplified model does not reproduce a resolved crater for these inputs', 'sub'));
+      $('readouts').insertAdjacentHTML('beforeend', row('Reference structure estimate', fmtLen(event.craterKm * 1000)) +
+        row('', res.crater ? `model / reference ≈ ${(res.crater.Dfr / (event.craterKm * 1000)).toFixed(2)}; inputs are not calibrated` : 'this simplified model does not reproduce a resolved crater for these inputs', 'sub'));
     }
   }
 
