@@ -17,6 +17,8 @@ export const SOURCES = [
 export function modelNotes(res) {
   const notes = [];
   const add = (code, text) => notes.push({ code, text });
+  add('post-impact-scope', 'Atmospheric transport, aerosol loading, climate response, ejecta-reentry heating, wildfire spread and antipodal damage are not calculated. Missing effects do not mean no consequences.');
+  add('visual-time', '3D seconds are playback time. Thermal highlighting shows primary exposure extent, not moving fire; particles, waves and giant outcomes remain schematic.');
   if (res.regime === 'giant') {
     add('giant-scaling', 'Collision regime and remnant mass use simplified scaling; the transition from cratering is an application rule.');
     add('giant-heuristics', 'Disk mass, moon formation, melting, spin and synestia are illustrative heuristics, not hydrodynamic predictions.');
@@ -96,7 +98,13 @@ export function createAssessmentReport(inputs, distance, { event = null, created
       geography: 'Homogeneous selected target. Map position is visual only; no elevation, bathymetry or population data are queried.',
       nullValues: 'Not calculated or outside model scope, not a zero effect.',
       tsunami: 'Amplitude above still water; not crest-to-trough wave height or coastal run-up.',
-      animation: 'Cinematic time and sizes do not define assessment values.' },
+      animation: 'Playback seconds are not elapsed physical time. Wave geometry, particles and giant outcomes are schematic; the thermal highlight is a primary exposure extent, not a wildfire perimeter.',
+      postImpact: {
+        atmosphericTransport: 'not-calculated', aerosolLoading: 'not-calculated',
+        climateResponse: 'not-calculated', ejectaReentryHeating: 'not-calculated',
+        wildfireSpread: 'not-calculated', antipodalDamage: 'not-calculated',
+        interpretation: 'Unavailable predictions do not establish an absence of effects.',
+      } },
     event: event ? { id: event.id, name: event.name, referenceCraterKm: event.craterKm ?? null, observedCraterKm: event.craterKm ?? null,
       sources: event.sources ?? [], evidence: event.evidence ?? null, note: 'Preset inputs are illustrative, not a fitted reconstruction.' } : null,
     result, observer, notes: modelNotes(result), sources: SOURCES,

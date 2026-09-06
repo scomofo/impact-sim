@@ -24,7 +24,7 @@
     <div id="phase-label">Standing by</div>
     <div id="top-controls">
       <label class="time-ctl">
-        <span>time</span>
+        <span>playback</span>
         <input type="range" id="time-slider" min="0" max="2" step="0.05" value="1">
         <span id="time-val">1.00×</span>
       </label>
@@ -86,6 +86,13 @@
       <button id="pin-btn" class="btn small" title="Pin to the comparison tray">+ compare</button>
     </div>
     <div id="readouts"></div>
+    <p id="post-impact-note" class="model-intro">3D is schematic. The pale highlight marks the estimated third-degree-burn exposure threshold, not spreading fire. Atmospheric transport, re-entry heating and climate effects are not calculated.</p>
+    <details id="post-impact-details">
+      <summary>What can this show after impact?</summary>
+      <p>Observer readouts estimate primary blast, thermal exposure, shaking and ejecta where the model applies. Exposure outside the highlighted burn threshold need not be zero. Ring widths, particles, ocean waves and giant-collision choreography are illustrations. The animation clock does not measure elapsed physical time.</p>
+      <p>Dust, sulfur and soot affect the atmosphere differently. Their amounts, particle sizes, injection heights, transport and removal are unresolved here. No visible climate effect means no calculation, not no consequence.</p>
+      <p>Current research: <a href="https://doi.org/10.1038/s41561-023-01290-4" target="_blank" rel="noopener">Chicxulub dust (2023)</a> · <a href="https://doi.org/10.1038/s41467-024-55145-6" target="_blank" rel="noopener">Sulfur constraints (2025)</a> · <a href="https://doi.org/10.1029/2026JG009837" target="_blank" rel="noopener">Re-entry heating (2026)</a>. These studies are context, not simulations performed by this app.</p>
+    </details>
     <details id="model-details">
       <summary>Model assumptions &amp; limits</summary>
       <div id="model-notes"></div>
@@ -116,10 +123,10 @@
   <div id="timeline" hidden>
     <button id="play-btn" class="btn small" title="Play / pause">❚❚</button>
     <div id="scrub-wrap">
-      <input type="range" id="scrub-slider" min="0" max="400" step="1" value="0" aria-label="Timeline position">
+      <input type="range" id="scrub-slider" min="0" max="400" step="1" value="0" aria-label="Animation position, not elapsed physical time">
       <div id="timeline-marks"></div>
     </div>
-    <span id="scrub-time">0.0 s</span>
+    <span id="scrub-time" title="Playback seconds, not elapsed physical time">0.0 s animation</span>
   </div>
 
   <div id="hint">drag to orbit · scroll to zoom · pick an impact from the catalog, or dial in your own</div>

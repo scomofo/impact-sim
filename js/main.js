@@ -1,5 +1,5 @@
 // main.js — scene, impact sequence state machine, camera director.
-// Scene scale: 1 unit = 1000 km. The physics readouts (physics.js) are real;
+// Scene scale: 1 unit = 1000 km. The readouts (physics.js) are analytical estimates;
 // the animation timeline is cinematic (approach compressed to seconds).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -265,11 +265,9 @@ const ring = new DebrisRing(scene, R);
 const chunks = new ChunkBurst(scene, R);
 const trail = new Trail(scene);
 const heatShell = makeHeatShell(R);
+heatShell.material.uniforms.uColor.value.setHex(0xe4cf8e); // exposure highlight
 planetGroup.add(heatShell);
-// Gray dust veil shell for climate-catastrophe impacts.
-const dustShell = makeHeatShell(R * 1.045);
-dustShell.material.uniforms.uColor.value.setHex(0x7d786c);
-planetGroup.add(dustShell);
+// Atmospheric loading and climate response are not calculated.
 
 // Moon that accretes from the debris disk after moon-forming impacts.
 const moonMat = new THREE.MeshPhongMaterial({
@@ -293,8 +291,6 @@ const sim = {
   state: 'idle',       // idle | approach | impact
   t: 0,                // time within current state (sim seconds)
   effTime: 0,          // monotonically growing effects clock (sim seconds)
-  secondaries: [],     // scheduled fallback-debris impacts {at, localDir, scale}
-  antipodeAt: null,    // effTime when the seismic front converges at the antipode
   timeScale: 1,
   trueScale: false,
   result: null,        // physics result for the running launch
@@ -303,22 +299,16 @@ const sim = {
   runT0: 0,            // effTime when the current launch started
   launchParams: null,  // params of the current run, for scrub replay
   timelineEvents: [],
-  phaseRestoreAt: null,
-  phaseRestoreText: '',
-  dustTarget: 0,
   replaySnapshot: null, // {surf, disp, craterCount} captured at launch
   lastScale: 1,
-  heatFrontArc: 0,      // how far the ignition front has swept (radians)
-  heatFrontSpeed: 0,
-  heatFrontMax: 0,
+  heatFrontArc: 0,      // fixed primary thermal-exposure extent (radians)
   heatDuration: 0,
-  globalMelt: false,
   moonForming: null,    // {at, growDur, finalR, orbitR, angle0, omega, ...}
   startWorld: new THREE.Vector3(),
   velDir: new THREE.Vector3(),
   tangent: new THREE.Vector3(),
   planetSpin: 0.004,
-  emissiveHeat: 0,     // planet lava-glow level 0..1
+  thermalHighlight: 0, // schematic exposure highlight opacity
   planetScale: 1,      // shrinks for disruption outcomes
   hitAndRun: null,     // {dir, speed} when the projectile escapes
   exaggeration: 1,
@@ -406,8 +396,6 @@ function launch(params) {
 
 function clearRun() {
   ejecta.clear(); ring.clear(); chunks.clear(); trail.clear(); flash.clear(); shock.clear();
-  sim.secondaries = [];
-  sim.antipodeAt = null;
   sim.moonForming = null;
   moon.visible = false;
   moon.scale.setScalar(0.001);
@@ -415,16 +403,8 @@ function clearRun() {
   heatShell.material.uniforms.uOpacity.value = 0;
   heatShell.material.uniforms.uFrontArc.value = 0;
   sim.heatFrontArc = 0;
-  sim.heatFrontSpeed = 0;
-  sim.heatFrontMax = 0;
   sim.heatDuration = 0;
-  sim.globalMelt = false;
-  dustShell.visible = false;
-  dustShell.material.uniforms.uOpacity.value = 0;
-  sim.dustTarget = 0;
-  sim.phaseRestoreAt = null;
-  sun.intensity = 2.6;
-  sim.emissiveHeat = 0;
+  sim.thermalHighlight = 0;
   sim.planetScale = 1;
   sim.hitAndRun = null;
   planetGroup.scale.setScalar(1);
@@ -475,15 +455,16 @@ function onContact() {
   if (res.regime === 'crater') {
     flash.trigger(Pw, strength);
 
-    // Three physical wave fronts, at their real relative order: fireball flash,
-    // then the seismic ring racing ahead of the slower air blast.
+    // Schematic wave markers; their extent, color and playback timing are
+    // not physical hazard boundaries. Observer readouts carry estimates.
     const reach = res.burn ?? (res.waterCrater ?? res.crater?.Dfr ?? 0) * 3;
     const burnArc = THREE.MathUtils.clamp(reach / EARTH.radius, 0.04, Math.PI);
     const fireArc = THREE.MathUtils.clamp((res.fireball ?? res.waterCrater ?? res.crater?.Dfr ?? 0) / EARTH.radius, 0.015, Math.PI);
     const quakeArc = THREE.MathUtils.clamp(burnArc * (2 + res.severity.level), 0.12, Math.PI);
     const fronts = [
       { speed: fireArc / 1.1, maxArc: fireArc, width: Math.max(0.012, fireArc * 0.3), peak: 1.0, tail: 1.2 },
-      { delay: 0.25, speed: quakeArc / 7, maxArc: quakeArc, width: 0.03 + 0.05 * (quakeArc / Math.PI), peak: 0.35, tail: 3 },
+      // Preserve the seismic color slot while withholding unsupported shaking.
+      { delay: 0.25, speed: quakeArc / 7, maxArc: quakeArc, width: 0.03 + 0.05 * (quakeArc / Math.PI), peak: res.seismic == null ? 0 : 0.35, tail: 3 },
       { delay: 0.4, speed: burnArc / 14, maxArc: burnArc, width: Math.max(0.02, burnArc * 0.1), peak: 0.8, tail: 2.2 },
     ];
     if (res.tsunami && res.waterDepth) {
@@ -516,38 +497,16 @@ function onContact() {
         sizeScale: THREE.MathUtils.clamp(0.6 + Dkm / 250, 0.6, 2.4),
         life: 18 + Math.min(22, Dkm / 15),
       });
-
-      // Fallback debris: schedule secondary strikes around big craters.
-      if (Dkm > 40) {
-        const craterArc = (res.crater.Dfr / 2) / EARTH.radius;
-        const n = 4 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < n; i++) {
-          sim.secondaries.push({
-            at: now + 2.5 + Math.random() * 6,
-            localDir: offsetOnSphere(sim.impactLocal, craterArc * (1.5 + Math.random() * 2.5)),
-            scale: 0.2 + Math.random() * 0.35,
-          });
-        }
-        sim.secondaries.sort((a, b) => a.at - b.at);
-      }
-    }
-
-    // Big quakes converge at the antipode.
-    if (res.severity.level >= 4 && quakeArc >= Math.PI * 0.99) {
-      sim.antipodeAt = now + 0.25 + Math.PI / (quakeArc / 7);
     }
 
     if (res.crater) paintCrater(sim.impactLocal, (res.crater.Dfr / 2) / EARTH.radius);
     if (visuals.heat > 0) {
-      sim.emissiveHeat = visuals.heat;
-      sim.heatFrontMax = visuals.thermalArc;
+      sim.thermalHighlight = visuals.heat;
+      sim.heatFrontArc = visuals.thermalArc;
       sim.heatDuration = visuals.heatDuration;
-      sim.globalMelt = false;
-      // The thermal footprint expands only to the modelled burn radius.
+      // Highlight the exposure footprint without implying a moving fire front.
       heatShell.material.uniforms.uImpactDir.value.copy(sim.impactLocal);
-      sim.heatFrontSpeed = Math.max(0.025, visuals.thermalArc / 4.5);
     }
-    sim.dustTarget = visuals.dust;
     ui.setPhase(res.waterDepth > 0 ? 'Ocean impact · illustrative effects' : 'Impact · illustrative effects');
     updateTimelineEvents(now);
     return;
@@ -561,7 +520,6 @@ function onContact() {
     { delay: 0.3, speed: Math.PI / 8, maxArc: Math.PI, width: 0.09, peak: 0.5, tail: 3 },
     { delay: 0.6, speed: Math.PI / 16, maxArc: Math.PI, width: 0.2, peak: 0.9, tail: 2.5 },
   ], now);
-  sim.antipodeAt = now + 0.3 + Math.PI / (Math.PI / 8);
 
   // Mantle-scale ejecta: km/s launch speeds, a fraction escaping outright.
   ejecta.spawn(Pw, Nw, now, {
@@ -575,12 +533,7 @@ function onContact() {
     life: 40,
   });
   paintCrater(sim.impactLocal, Math.min(1.2, 0.35 + g.gamma * 2));
-  sim.emissiveHeat = visuals.heat;
-  sim.heatFrontMax = visuals.thermalArc;
-  sim.heatDuration = visuals.heatDuration;
-  sim.globalMelt = true;
-  heatShell.material.uniforms.uImpactDir.value.copy(sim.impactLocal);
-  sim.heatFrontSpeed = Math.PI / 7;   // mantle-melt front wraps in ~7 s
+  // The giant-impact energy proxy does not resolve a surface heat field.
 
   const orbitNormal = new THREE.Vector3().crossVectors(sim.velDir, Nw).normalize();
   if (g.outcome === 'hit-and-run') {
@@ -592,15 +545,14 @@ function onContact() {
       count: 9000, vMin: 3000, vMax: 12000, spread: 0.35, curtainBias: 0.3,
       hotFrac: 0.9, sizeScale: 2.5, life: 30,
     });
-    ui.setPhase('Hit and run — projectile survives and escapes');
+    ui.setPhase('Schematic hit-and-run outcome');
   } else if (g.outcome === 'catastrophic disruption' || g.outcome === 'super-catastrophic') {
     chunks.trigger(sim.velDir);
     ring.trigger(Pw, orbitNormal);
     sim.planetScale = Math.max(0.25, Math.cbrt(Math.max(g.mlrFrac, 0.02)));
-    atmosphere.visible = false;
     ui.setPhase(g.outcome === 'super-catastrophic'
-      ? 'Super-catastrophic — planet destroyed'
-      : 'Catastrophic disruption — planet shattered');
+      ? 'Schematic super-catastrophic disruption'
+      : 'Schematic catastrophic disruption');
   } else {
     if (g.moonForming) {
       ring.trigger(Pw, orbitNormal);
@@ -615,9 +567,9 @@ function onContact() {
         started: false,
         done: false,
       };
-      ui.setPhase('Giant impact — debris disk forming (a moon is born)');
+      ui.setPhase('Hypothetical debris disk · moon formation is heuristic');
     } else {
-      ui.setPhase(`Giant impact — ${g.outcome}`);
+      ui.setPhase(`Schematic giant impact — ${g.outcome}`);
     }
   }
   updateTimelineEvents(now);
@@ -626,24 +578,10 @@ function onContact() {
 // Push the contact-time-scheduled events onto the scrubber.
 function updateTimelineEvents(contactTime) {
   const rel = (t) => t - sim.runT0;
-  for (const s of sim.secondaries) {
-    sim.timelineEvents.push({ t: rel(s.at), label: 'secondary' });
-  }
-  if (sim.antipodeAt !== null) {
-    sim.timelineEvents.push({ t: rel(sim.antipodeAt), label: 'antipode' });
-  }
   if (sim.moonForming) {
     sim.timelineEvents.push({ t: rel(sim.moonForming.at), label: 'moon' });
   }
   ui.setTimeline(RUN_DURATION, sim.timelineEvents);
-}
-
-// A point on the unit sphere at arc-distance `arc` from `dir`, random azimuth.
-function offsetOnSphere(dir, arc) {
-  const helper = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-  const axis = new THREE.Vector3().crossVectors(dir, helper).normalize();
-  axis.applyAxisAngle(dir, Math.random() * Math.PI * 2);
-  return dir.clone().applyAxisAngle(axis, arc).normalize();
 }
 
 // --- timeline scrubbing -----------------------------------------------------
@@ -817,28 +755,14 @@ function advance(rawDt) {
     }
   } else if (sim.state === 'impact') {
     sim.t += dt;
-    // Ignition front sweeps outward from ground zero; the planet only glows
-    // uniformly once the front has wrapped the globe.
-    if (sim.emissiveHeat > 0) {
-      // Stop at the physical footprint; giant profiles include a small shader
-      // fade-width overshoot so their genuinely global sweep closes cleanly.
-      sim.heatFrontArc = Math.min(sim.heatFrontMax, sim.heatFrontArc + sim.heatFrontSpeed * dt);
-      const frac = Math.min(1, sim.heatFrontArc / Math.max(sim.heatFrontMax, 1e-6));
-      const ramp = Math.min(1, sim.t / 1.2);
-      const cooling = Math.max(0, 1 - Math.max(0, sim.t - 3) / Math.max(sim.heatDuration, 1));
-      const lvl = sim.emissiveHeat * ramp * cooling;
-      // Only mantle-scale outcomes alter the base material globally. Ordinary
-      // impacts are represented by their localized surface footprint alone.
-      const uni = sim.globalMelt ? lvl * Math.min(1, sim.heatFrontArc / Math.PI) ** 1.3 : 0;
-      planetMat.emissive.setRGB(uni, uni * 0.25, uni * 0.05);
+    // Static exposure extent, fading on playback time. This is not the
+    // physical radiation duration or a moving ignition/melting perimeter.
+    if (sim.thermalHighlight > 0) {
+      const lvl = sim.thermalHighlight * Math.max(0, 1 - sim.t / sim.heatDuration);
       heatShell.material.uniforms.uFrontArc.value = sim.heatFrontArc;
-      heatShell.material.uniforms.uOpacity.value = 0.55 * lvl;
-      heatShell.visible = lvl > 0.02;
-      if (sim.globalMelt && sim.emissiveHeat > 0.3) {
-        clouds.material.opacity = Math.max(0, clouds.material.opacity - dt * 0.12 * (0.3 + frac));
-      }
+      heatShell.material.uniforms.uOpacity.value = lvl;
+      heatShell.visible = lvl > 0.004;
     }
-    if (sim.planetScale < 1) clouds.visible = false;
     // Disruption: planet shrinks to its largest remnant.
     if (sim.planetScale < 1) {
       const k = Math.min(1, sim.t / 6);
@@ -860,46 +784,6 @@ function advance(rawDt) {
     if (sim.effTime - sim.runT0 >= RUN_DURATION) sim.state = 'idle';
   }
 
-  // Scheduled events: fallback-debris secondaries and antipodal convergence.
-  if (sim.secondaries.length && dt > 0) {
-    while (sim.secondaries.length && sim.secondaries[0].at <= sim.effTime) {
-      const s = sim.secondaries.shift();
-      const p = planetGroup.localToWorld(s.localDir.clone().multiplyScalar(R));
-      flash.trigger(p, 0.15 * s.scale + 0.05);
-      ejecta.spawn(p, p.clone().normalize(), sim.effTime, {
-        count: Math.round(1200 * s.scale), vMin: 80, vMax: 900 * s.scale,
-        spread: 0.7, hotFrac: 0.4, sizeScale: 0.7, life: 10,
-      });
-      paintCrater(s.localDir, 0.004 + 0.01 * s.scale);
-    }
-  }
-  if (sim.antipodeAt !== null && sim.effTime >= sim.antipodeAt && dt > 0) {
-    sim.antipodeAt = null;
-    const anti = sim.impactLocal.clone().negate();
-    const p = planetGroup.localToWorld(anti.clone().multiplyScalar(R));
-    flash.trigger(p, 0.9);
-    ejecta.spawn(p, p.clone().normalize(), sim.effTime, {
-      count: 4000, vMin: 150, vMax: 2000, spread: 1.1, hotFrac: 0.45, sizeScale: 1.2, life: 14,
-    });
-    sim.phaseRestoreAt = sim.effTime + 3.5;
-    sim.phaseRestoreText = document.getElementById('phase-label').textContent;
-    ui.setPhase('Seismic waves converge at the antipode');
-  }
-
-  if (sim.phaseRestoreAt !== null && sim.effTime >= sim.phaseRestoreAt) {
-    ui.setPhase(sim.phaseRestoreText);
-    sim.phaseRestoreAt = null;
-  }
-
-  // Dust veil: severe impacts loft a sun-dimming haze over ~15 s.
-  if (sim.dustTarget > 0) {
-    const cur = dustShell.material.uniforms.uOpacity.value;
-    const next = cur + (sim.dustTarget - cur) * Math.min(1, dt * 0.09);
-    dustShell.material.uniforms.uOpacity.value = next;
-    dustShell.visible = next > 0.004;
-    sun.intensity = 2.6 * (1 - 1.4 * next);
-  }
-
   // Moon accretion: the disk drains into a growing moon on a slow orbit.
   if (sim.moonForming && sim.effTime >= sim.moonForming.at) {
     const m = sim.moonForming;
@@ -907,7 +791,7 @@ function advance(rawDt) {
       m.started = true;
       moon.visible = true;
       ring.startAccretion(() => _moonPos);
-      ui.setPhase('The debris disk coalesces — a new moon grows');
+      ui.setPhase('Hypothetical moon accretion · timing not modeled');
     }
     const k = Math.min(1, (sim.effTime - m.at) / m.growDur);
     const ease = k * k * (3 - 2 * k);
@@ -921,7 +805,7 @@ function advance(rawDt) {
     moonMat.emissiveIntensity = 0.85 * Math.exp(-(sim.effTime - m.at) / 25) + 0.06;
     if (k >= 1 && !m.done) {
       m.done = true;
-      ui.setPhase('A new moon settles into orbit');
+      ui.setPhase('Hypothetical moon outcome · heuristic');
     }
   }
 

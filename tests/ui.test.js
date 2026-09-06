@@ -49,6 +49,19 @@ test('each preset retains exact numerical parameters through launch', () => {
   }
 });
 
+test('post-impact scope remains visible and timeline values identify playback seconds', () => {
+  assert.equal(el('post-impact-note').hidden, false);
+  assert.match(el('post-impact-note').textContent, /not calculated/);
+  assert.match(el('post-impact-details').textContent, /not simulations performed by this app/);
+  ui.setTimeline(48, [{ t: 5.5, label: 'impact' }]);
+  ui.setTimelineTime(12.5);
+  assert.equal(el('scrub-time').textContent, '12.5 s animation');
+  input('scrub-slider', 200);
+  assert.match(el('scrub-time').textContent, /s animation$/);
+  ui.hideTimeline();
+  assert.equal(el('post-impact-note').hidden, false);
+});
+
 test('editing a field preserves other exact values and clears the preset URL', () => {
   clickEvent('apophis');
   input('ang-input', 44.75);
