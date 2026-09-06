@@ -1,8 +1,9 @@
 // effects.js — visual effect systems for the impact sequence. Scene units:
-// 1 unit = 1000 km (UNIT meters). Physics readouts are exact (physics.js);
+// 1 unit = 1000 km (UNIT meters). Physics readouts are analytical estimates;
 // particle motion here runs on a cinematic time-lapse (TIMELAPSE real seconds
 // of physics per displayed second) so planetary-scale ballistics read well.
 import * as THREE from 'three';
+import { waveBandGLSL } from './wave-front.js';
 
 export const UNIT = 1e6;      // meters per scene unit
 export const TIMELAPSE = 80;  // physics seconds per sim second for particles
@@ -75,10 +76,9 @@ export function makeAtmosphere(radius) {
   return new THREE.Mesh(new THREE.SphereGeometry(radius * 1.03, 64, 48), mat);
 }
 
-// Additive fresnel shell for the global-heat look. The glow SWEEPS outward
-// from uImpactDir: only regions the ignition front has passed (arc distance
-// < uFrontArc) burn. Default uFrontArc = PI behaves as a uniform veil (used
-// by the dust shell).
+// Localized illustration of a thermal-exposure footprint around uImpactDir.
+// uFrontArc is its angular extent, not an advancing wildfire or melt boundary.
+// Default extent and opacity are zero so a new shell cannot tint the globe.
 export function makeHeatShell(radius) {
   const mat = new THREE.ShaderMaterial({
     transparent: true, blending: THREE.AdditiveBlending, side: THREE.FrontSide, depthWrite: false,
@@ -86,8 +86,7 @@ export function makeHeatShell(radius) {
       uColor: { value: new THREE.Color(0xff5a1a) },
       uOpacity: { value: 0 },
       uImpactDir: { value: new THREE.Vector3(0, 0, 1) },
-      // PI + fade width = truly uniform (the dust shell relies on this default).
-      uFrontArc: { value: Math.PI + 0.35 },
+      uFrontArc: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec3 vNormal;
@@ -119,15 +118,18 @@ export function makeHeatShell(radius) {
         return mix(mix(mix(a,b,f.x), mix(c,d,f.x), f.y), mix(mix(e,g,f.x), mix(h,k,f.x), f.y), f.z);
       }
       void main() {
-        if (uOpacity < 0.004) discard;
-        float ang = acos(clamp(dot(vDir, uImpactDir), -1.0, 1.0));
-        // Burned region: behind the front, brightest just behind the edge.
-        float swept = 1.0 - smoothstep(uFrontArc - 0.35, uFrontArc, ang);
-        if (swept < 0.004) discard;
-        float edge = 1.0 + 1.6 * exp(-pow((uFrontArc - ang) / 0.18, 2.0));
-        float mottle = 0.55 + 0.45 * vnoise(vDir * 26.0);
+        if (uOpacity < 0.004 || uFrontArc <= 0.0) discard;
+        vec3 dir = normalize(vDir);
+        float ang = acos(clamp(dot(dir, normalize(uImpactDir)), -1.0, 1.0));
+        // Feather inside the exposure extent; small footprints retain a visible
+        // interior instead of disappearing into a fixed planet-scale feather.
+        float edgeWidth = min(0.35, max(0.001, uFrontArc * 0.3));
+        float footprint = 1.0 - smoothstep(uFrontArc - edgeWidth, uFrontArc, ang);
+        if (footprint < 0.004) discard;
+        float edge = 1.0 + 1.6 * exp(-pow((uFrontArc - ang) / (edgeWidth * 0.5), 2.0));
+        float mottle = 0.55 + 0.45 * vnoise(dir * 26.0);
         float f = 0.35 + 0.65 * pow(1.0 - abs(dot(vNormal, vView)), 2.0);
-        gl_FragColor = vec4(uColor * edge * mottle, f * uOpacity * swept);
+        gl_FragColor = vec4(uColor * edge * mottle, f * uOpacity * footprint);
       }`,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.005, 64, 48), mat);
@@ -209,6 +211,7 @@ export class ShockWaves {
         uniform vec4 uFronts[${MAX_FRONTS}];
         uniform vec3 uColors[${MAX_FRONTS}];
         varying vec3 vDir;
+        ${waveBandGLSL}
         float hash(vec3 p) {
           return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
         }
@@ -227,9 +230,7 @@ export class ShockWaves {
             vec4 f = uFronts[i];
             if (f.z < 0.004) continue;
             float d = ang - f.x;
-            float lead = exp(-pow(max(d, 0.0) / (f.y * 0.35), 2.0));
-            float tail = exp(-pow(max(-d, 0.0) / (f.y * f.w), 1.3)) * 0.55;
-            float band = max(lead, tail);
+            float band = waveBand(d, f.y, f.w);
             band *= mix(0.7, 1.2, vnoise(dir * 42.0 + float(i) * 7.31));
             acc += uColors[i] * band * f.z;
           }

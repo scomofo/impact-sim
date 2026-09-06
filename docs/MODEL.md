@@ -44,6 +44,8 @@ Disk mass, moon formation, melt fraction, day length and synestia are heuristic 
 
 Color/severity levels are energy bands used to drive cinematic effects. They do not predict extinction, civilization loss or ocean boiling. The 3D view uses compressed time, exaggerated sizes and simplified choreography. Even after replaying a launch, assessment values describe that launch's initial conditions; repeated launches do not evolve the planet's physical input parameters.
 
+The [post-impact scientific audit](POST_IMPACT.md) distinguishes supported primary estimates from missing aftermath models and documents research through July 2026. The rendering correction removes automatic global dust/dimming, invented secondary/antipodal explosions and unconditional giant-impact lava/atmosphere-loss effects. Primary thermal exposure is now a stationary, un-enlarged highlight rather than a sweeping ignition front. The timeline explicitly labels animation seconds; exports identify missing aftermath predictions as `not-calculated`. The numerical model remains 0.2.0: these changes correct visual implications, not validate new physical equations.
+
 ## Verification and remaining limits
 
 Run `npm ci`, `npm run check`, and `npm test` with Node 22.22.2+ or 24.15.0+ (supported LTS versions). The browser app itself has no npm/runtime dependency or build step; jsdom is for tests only.

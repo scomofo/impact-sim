@@ -120,7 +120,7 @@ export function renderReadout(res) {
   rows.push(row('Disruption ratio Q/Q*', g.ratio < 0.01 ? '< 0.01' : g.ratio.toFixed(2)));
   rows.push(row('Largest remnant', `${(g.mlrFrac * 100).toFixed(0)}% of total mass`));
   if (g.merged && g.dayHours) rows.push(row('Day length after', `≈ ${g.dayHours.toFixed(1)} h · heuristic`));
-  rows.push(row('Melt proxy (heuristic)', g.magmaOcean ? `global magma ocean (${(g.meltFraction * 100).toFixed(0)}%)` : `${(g.meltFraction * 100).toFixed(0)}% — partial`));
+  rows.push(row('Melt proxy (heuristic)', `${(g.meltFraction * 100).toFixed(0)}% proxy — spatial extent unresolved`));
   if (g.synestia) rows.push(row('Illustrative state', 'possible synestia (heuristic)', 'highlight'));
   if (g.moonForming) {
     rows.push(row('Debris disk', `≈ ${g.diskMoons.toFixed(1)} lunar masses · moon formation possible (heuristic)`, 'highlight'));
@@ -422,7 +422,7 @@ export function initUI(handlers) {
   scrub.addEventListener('change', () => { scrubbing = false; });
   scrub.addEventListener('input', () => {
     const tau = (Number(scrub.value) / Number(scrub.max)) * scrubDuration;
-    $('scrub-time').textContent = `${tau.toFixed(1)} s`;
+    $('scrub-time').textContent = `${tau.toFixed(1)} s animation`;
     handlers.onScrub?.(tau);
   });
   $('play-btn').addEventListener('click', () => handlers.onPlayPause?.());
@@ -529,7 +529,7 @@ export function initUI(handlers) {
       if (scrubbing) return;
       const v = Math.min(1, tau / scrubDuration);
       scrub.value = String(Math.round(v * Number(scrub.max)));
-      $('scrub-time').textContent = `${Math.min(tau, scrubDuration).toFixed(1)} s`;
+      $('scrub-time').textContent = `${Math.min(tau, scrubDuration).toFixed(1)} s animation`;
     },
     setTimeScale(v) {
       timeSlider.value = String(v);

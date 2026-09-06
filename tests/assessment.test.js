@@ -56,3 +56,17 @@ test('missing effects and extrapolation remain visible in notes', () => {
   const wet = computeImpact({ ...input, diameter: 1750, target: 'ocean' });
   assert.ok(modelNotes(wet).some((note) => note.code === 'tsunami-heuristic'));
 });
+
+test('unmodelled post-impact consequences are explicit in every catalog report', () => {
+  for (const event of CATALOG) {
+    const report = createAssessmentReport({ ...event, density: COMPOSITIONS[event.comp].density }, 500000);
+    const scope = report.assumptions.postImpact;
+    for (const effect of ['atmosphericTransport', 'aerosolLoading', 'climateResponse',
+      'ejectaReentryHeating', 'wildfireSpread', 'antipodalDamage']) {
+      assert.equal(scope[effect], 'not-calculated', `${event.id}: ${effect}`);
+    }
+    assert.ok(report.notes.some((note) => note.code === 'post-impact-scope'));
+    assert.match(report.assumptions.animation, /not elapsed physical time/);
+    assert.match(scope.interpretation, /do not establish an absence/);
+  }
+});

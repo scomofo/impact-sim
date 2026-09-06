@@ -377,14 +377,13 @@ th, td { padding: 5px 3px; border-bottom: 1px solid var(--border); text-align: l
   border-radius: 1px;
 }
 .tl-mark.impact { background: var(--accent); }
-.tl-mark.secondary { background: rgba(255, 200, 120, 0.55); }
-.tl-mark.antipode { background: #4dd2ff; }
 .tl-mark.moon { background: #cfd8e6; }
 #scrub-time {
   font-size: 11px;
   color: var(--dim);
   font-variant-numeric: tabular-nums;
-  min-width: 44px;
+  white-space: nowrap;
+  flex-shrink: 0;
   text-align: right;
 }
 

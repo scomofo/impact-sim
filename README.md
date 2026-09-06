@@ -23,6 +23,8 @@ Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URL
 - Export JSON to preserve exact inputs, model version, sources, assumptions and observer results. Compare up to four scenarios.
 - Launch and scrub the 3D illustration. Pause freezes the automatic camera; manual orbit remains available. Hidden tabs suspend rendering without fast-forwarding on return. Reduced-motion preferences default to a free camera; the cinematic camera can still be explicitly enabled. Animation time, sizes and wave fronts are cinematic, not geographical hazard boundaries.
 
+The pale thermal highlight shows the calculated primary exposure extent without enlarging small footprints or depicting a spreading fire. Atmospheric transport, climate response, re-entry heating and antipodal damage are not calculated. Automatic global dust/dimming, planet-wide molten coloration and invented secondary explosions have been removed. See the [post-impact scientific audit](docs/POST_IMPACT.md) for current research, remaining schematic effects and the work needed for a physical aftermath model.
+
 Share an unmodified catalog preset with `?p=bennu`, `?p=ries`, `?p=theia`, etc. Custom input changes clear the preset URL; use JSON export to preserve custom scenarios.
 
 Catalog values are illustrative rather than fitted historical reconstructions. When a reference crater diameter exists, the app shows it beside the calculated result so disagreement is visible. Updated source notes include Hiawatha's age, Nadir's inferred water depth and the time window of NASA's 2021 Bennu risk estimate.
@@ -60,5 +62,6 @@ Tests include published calculation examples, conservation and boundary checks, 
 | `js/ui.js` | Exact inputs, validation, readouts, comparisons and export |
 | `js/main.js` | Optional Three.js scene, camera, launch/replay state |
 | `js/effects.js` | Cinematic particles, waves, craters and debris effects |
+| `js/visual-model.js`, `js/wave-front.js` | Scoped exposure visualization and localized wave shader envelope |
 
 The scientific baseline is [Collins, Melosh & Marcus (2005)](https://doi.org/10.1111/j.1945-5100.2005.tb00157.x), with [Collins et al. (2017)](https://doi.org/10.1111/maps.12873) informing airburst assumptions. Giant-impact scaling references [Leinhardt & Stewart (2012)](https://doi.org/10.1088/0004-637X/745/1/79) and [Genda et al. (2012)](https://arxiv.org/abs/1109.4330). This implementation's documented deviations and heuristics are part of the assessment, not hidden calibration.
