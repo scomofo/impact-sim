@@ -1,0 +1,19 @@
+{
+  "name": "@orbital-suite/astrolab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MATLAB-flavoured numerical toolbox for orbital mechanics: matrices, ode45, Kepler, Lambert, and a MATLAB-syntax interpreter.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --no-warnings --test tests/*.test.ts",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

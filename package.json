@@ -1,16 +1,24 @@
 {
-  "name": "impact-sim",
-  "version": "0.3.0",
+  "name": "orbital-suite",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "A suite of space, orbital-mechanics and impact simulation tools.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "test": "node --test tests/*.test.js",
-    "check": "node --check js/physics.js && node --check js/assessment.js && node --check js/visual-model.js && node --check js/ui.js && node --check js/main.js && node --check js/app.js && node --check js/startup.js && node --check js/scene-runtime.js && node --check js/catalog-evidence.js && node --check js/catalog.js && node --check js/benchmarks.js && node --check js/benchmark-page.js && node --check js/effects.js && node --check js/wave-front.js"
+    "check": "npm run check --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:impact": "python3 -m http.server 8742",
+    "dev:libration": "npm run dev -w @orbital-suite/libration",
+    "dev:helios": "npm run dev -w @orbital-suite/helios",
+    "dev:stackyard": "npm run dev -w @orbital-suite/stackyard",
+    "dev:lab": "npm run dev -w @orbital-suite/lab"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
-  },
-  "devDependencies": {
-    "jsdom": "30.0.1"
   }
 }

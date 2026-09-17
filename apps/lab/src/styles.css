@@ -1,0 +1,171 @@
+:root {
+  --bg: #0a0c10;
+  --surface: #12151c;
+  --elevated: #1a1e27;
+  --fg: #ebe8e1;
+  --muted: #8f8b85;
+  --accent: #b9c4cc;
+  --accent-strong: #e8c170;
+  --border: rgb(235 232 225 / 0.12);
+  --error: #f08a7e;
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-display: "Instrument Serif", Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+.brand { display: flex; flex-direction: column; }
+.brand-title { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.01em; }
+.brand-sub { color: var(--muted); font-size: 12px; }
+.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.select-label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+select {
+  background: var(--elevated);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  max-width: 260px;
+}
+.btn {
+  background: var(--elevated);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn.link { color: var(--muted); }
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.2fr) minmax(280px, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "editor console figure"
+    "editor console vars";
+  gap: 1px;
+  background: var(--border);
+}
+.pane {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.editor-pane { grid-area: editor; }
+.console-pane { grid-area: console; }
+.figure-pane { grid-area: figure; position: relative; }
+.vars-pane { grid-area: vars; }
+.pane-title {
+  padding: 6px 12px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+#editor {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.output {
+  flex: 1;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.output .cmd { color: var(--accent-strong); }
+.output .err { color: var(--error); }
+.output .muted { color: var(--muted); }
+.prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.prompt { font-family: var(--font-mono); color: var(--accent-strong); }
+#prompt {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+#figure { flex: 1; width: 100%; height: 100%; display: block; min-height: 0; }
+.figure-empty {
+  position: absolute;
+  inset: 32px 0 0 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  pointer-events: none;
+}
+.figure-empty.hidden { display: none; }
+
+.vars { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+.vars-pane { overflow: auto; }
+.vars th, .vars td { text-align: left; padding: 4px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.vars th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
+.vars td.value { color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: 40vh 50vh 40vh 30vh;
+    grid-template-areas: "console" "editor" "figure" "vars";
+  }
+}

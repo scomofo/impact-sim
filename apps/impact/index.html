@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planetary Impact Simulator</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="scene"></div>
+  <div id="app-status" role="status">Loading assessment controls…</div>
+
+  <header id="topbar">
+    <div id="title">PLANETARY IMPACT SIMULATOR</div>
+    <div id="phase-label">Standing by</div>
+    <div id="top-controls">
+      <label class="time-ctl">
+        <span>playback</span>
+        <input type="range" id="time-slider" min="0" max="2" step="0.05" value="1">
+        <span id="time-val">1.00×</span>
+      </label>
+      <button id="cinematic-btn" class="btn small active" title="Camera follows the action">cinematic cam</button>
+      <label class="chk"><input type="checkbox" id="truescale-chk"> true scale</label>
+      <button id="reset-btn" class="btn small" title="Heal all craters">reset planet</button>
+    </div>
+  </header>
+
+  <aside id="control-panel" class="panel">
+    <h2>Impactor</h2>
+    <p class="model-intro">Scenario estimates · cinematic 3D view</p>
+    <div id="presets"></div>
+    <div id="event-note" hidden></div>
+    <div id="city-bar" hidden>
+      <div class="era-label">Drop it on</div>
+    </div>
+    <div class="ctl">
+      <label for="dia-slider">Diameter <span id="dia-val" class="ctl-val"></span></label>
+      <input type="range" id="dia-slider" min="0" max="1000" step="1" value="620" aria-label="Impactor diameter">
+      <label for="dia-input">Exact diameter (m)</label>
+      <input type="number" id="dia-input" min="10" max="7420000" step="any" value="1000" required>
+    </div>
+    <div class="ctl">
+      <label for="vel-slider">Incoming speed <span id="vel-val" class="ctl-val"></span></label>
+      <input type="range" id="vel-slider" min="5" max="72" step="0.1" value="20" aria-label="Incoming velocity">
+      <label for="vel-input">Exact speed (km/s)</label>
+      <input type="number" id="vel-input" min="5" max="72" step="any" value="20" required>
+    </div>
+    <div class="ctl">
+      <label for="ang-slider">Impact angle <span id="ang-val" class="ctl-val"></span></label>
+      <input type="range" id="ang-slider" min="5" max="90" step="1" value="45" aria-label="Impact angle">
+      <label for="ang-input">From horizontal (degrees)</label>
+      <input type="number" id="ang-input" min="5" max="90" step="any" value="45" required>
+    </div>
+    <div class="ctl">
+      <label for="comp-select">Composition</label>
+      <select id="comp-select"></select>
+      <label for="density-input">Bulk density (kg/m³)</label>
+      <input type="number" id="density-input" min="500" max="8000" step="any" value="3000" required>
+    </div>
+    <div class="ctl">
+      <label for="target-select">Target terrain</label>
+      <select id="target-select"></select>
+    </div>
+    <div class="ctl" id="water-control" hidden>
+      <label for="water-input">Water depth (m)</label>
+      <input type="number" id="water-input" min="0" max="11000" step="any" value="0" required>
+    </div>
+    <div class="ctl-note">Map position is visual. Select terrain and water depth explicitly.</div>
+    <div id="input-error" role="alert" hidden></div>
+    <button id="launch-btn" class="btn launch">LAUNCH</button>
+    <div id="exag-note"></div>
+  </aside>
+
+  <aside id="readout-panel" class="panel">
+    <div id="readout-head">
+      <h2 id="readout-title">Scenario estimate</h2>
+      <button id="pin-btn" class="btn small" title="Pin to the comparison tray">+ compare</button>
+    </div>
+    <div id="readouts"></div>
+    <p id="post-impact-note" class="model-intro">3D is schematic. The pale highlight marks the estimated third-degree-burn exposure threshold, not spreading fire. Atmospheric transport, re-entry heating and climate effects are not calculated.</p>
+    <details id="post-impact-details">
+      <summary>What can this show after impact?</summary>
+      <p>Observer readouts estimate primary blast, thermal exposure, shaking and ejecta where the model applies. Exposure outside the highlighted burn threshold need not be zero. Ring widths, particles, ocean waves and giant-collision choreography are illustrations. The animation clock does not measure elapsed physical time.</p>
+      <p>Dust, sulfur and soot affect the atmosphere differently. Their amounts, particle sizes, injection heights, transport and removal are unresolved here. No visible climate effect means no calculation, not no consequence.</p>
+      <p>Current research: <a href="https://doi.org/10.1038/s41561-023-01290-4" target="_blank" rel="noopener">Chicxulub dust (2023)</a> · <a href="https://doi.org/10.1038/s41467-024-55145-6" target="_blank" rel="noopener">Sulfur constraints (2025)</a> · <a href="https://doi.org/10.1029/2026JG009837" target="_blank" rel="noopener">Re-entry heating (2026)</a>. These studies are context, not simulations performed by this app.</p>
+    </details>
+    <details id="model-details">
+      <summary>Model assumptions &amp; limits</summary>
+      <div id="model-notes"></div>
+      <p><a href="benchmarks.html" target="_blank" rel="noopener">Explore model benchmarks ↗</a></p>
+    </details>
+    <details id="sensitivity-details">
+      <summary>Input sensitivity</summary>
+      <p class="model-intro">Vary one input at a time; other inputs stay fixed. These samples are not confidence intervals or guaranteed extremes. Angle changes are relative percentages, not added degrees.</p>
+      <div class="ctl"><label for="sensitivity-param">Vary</label><select id="sensitivity-param"><option value="diameter">Diameter</option><option value="velocity">Incoming speed</option><option value="density">Bulk density</option><option value="angleDeg">Impact angle</option></select></div>
+      <div class="ctl"><label for="sensitivity-span">Relative change either side</label><select id="sensitivity-span"><option value="0.05">±5%</option><option value="0.1" selected>±10%</option><option value="0.2">±20%</option><option value="0.5">±50%</option></select></div>
+      <div id="sensitivity-readouts"></div>
+    </details>
+    <div id="observer-section">
+      <h2>Observer effects</h2>
+      <div class="ctl">
+        <label for="obs-slider">Distance from ground zero <span id="obs-val" class="ctl-val"></span></label>
+        <input type="range" id="obs-slider" min="0" max="1000" step="1" value="627">
+        <label for="obs-input">Exact distance (km)</label>
+        <input type="number" id="obs-input" min="0" max="20015.086796020572" step="any" value="500" required>
+      </div>
+      <div id="observer-readouts"></div>
+    </div>
+    <button id="export-btn" class="btn">Export assessment JSON</button>
+  </aside>
+
+  <div id="compare-tray"></div>
+
+  <div id="timeline" hidden>
+    <button id="play-btn" class="btn small" title="Play / pause">❚❚</button>
+    <div id="scrub-wrap">
+      <input type="range" id="scrub-slider" min="0" max="400" step="1" value="0" aria-label="Animation position, not elapsed physical time">
+      <div id="timeline-marks"></div>
+    </div>
+    <span id="scrub-time" title="Playback seconds, not elapsed physical time">0.0 s animation</span>
+  </div>
+
+  <div id="hint">drag to orbit · scroll to zoom · pick an impact from the catalog, or dial in your own</div>
+
+  <noscript>This app needs JavaScript to calculate an assessment.</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
