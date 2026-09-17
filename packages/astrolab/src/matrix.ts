@@ -324,8 +324,9 @@ function reduceColumns(m: Matrix, f: (col: number[]) => number): Matrix {
 export const sum = (m: Matrix): Matrix => reduceColumns(m, (c) => c.reduce((s, x) => s + x, 0));
 export const prod = (m: Matrix): Matrix => reduceColumns(m, (c) => c.reduce((s, x) => s * x, 1));
 export const mean = (m: Matrix): Matrix => reduceColumns(m, (c) => c.reduce((s, x) => s + x, 0) / c.length);
-export const max = (m: Matrix): Matrix => reduceColumns(m, (c) => Math.max(...c));
-export const min = (m: Matrix): Matrix => reduceColumns(m, (c) => Math.min(...c));
+const finite = (c: number[]): number[] => c.filter((x) => !Number.isNaN(x));
+export const max = (m: Matrix): Matrix => reduceColumns(m, (c) => { const f = finite(c); return f.length ? Math.max(...f) : NaN; });
+export const min = (m: Matrix): Matrix => reduceColumns(m, (c) => { const f = finite(c); return f.length ? Math.min(...f) : NaN; });
 export const std = (m: Matrix): Matrix =>
   reduceColumns(m, (c) => {
     if (c.length < 2) return 0;

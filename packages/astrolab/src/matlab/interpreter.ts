@@ -42,8 +42,20 @@ export interface PlotSeries {
   label?: string;
 }
 
+export interface ContourField {
+  /** Column coordinates (length = z[0].length). */
+  x: number[];
+  /** Row coordinates (length = z.length). */
+  y: number[];
+  /** z[row][col]; NaN cells are left blank. */
+  z: number[][];
+  levels: number[];
+  filled: boolean;
+}
+
 export interface PlotState {
   series: PlotSeries[];
+  contour: ContourField | null;
   title: string;
   xlabel: string;
   ylabel: string;
@@ -536,5 +548,5 @@ export function binaryOp(op: string, l: Matrix, r: Matrix): Matrix {
 }
 
 export function emptyPlot(): PlotState {
-  return { series: [], title: "", xlabel: "", ylabel: "", grid: false, equal: false, legend: null, hold: false };
+  return { series: [], contour: null, title: "", xlabel: "", ylabel: "", grid: false, equal: false, legend: null, hold: false };
 }

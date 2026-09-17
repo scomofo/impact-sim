@@ -117,3 +117,27 @@ test("numeric helpers", () => {
   assert.deepEqual(interp1([0, 1, 2], [0, 10, 20], [0.5, 1.5, 3]), [5, 15, NaN]);
   close(trapz([0, 1, 2], [0, 1, 4]), 3, 1e-12);
 });
+
+test("planet ephemerides and Julian dates", () => {
+  assert.equal(A.juliandate(2000, 1, 1, 12), 2451545);
+  assert.deepEqual(A.jd2date(2451545).year, 2000);
+  const e = A.planetState("earth", A.juliandate(2020, 7, 30));
+  close(A.v3.norm(e.r) / A.AU, 1.015, 2e-3);
+  close(A.v3.norm(e.v) / 1e3, 29.3, 5e-3);
+  const m = A.planetState("mars", A.juliandate(2021, 2, 18));
+  assert.ok(Math.abs(A.v3.norm(m.r) / A.AU - 1.57) < 0.03);
+});
+
+test("Earth–Mars 2020 porkchop minimum matches the real launch window", () => {
+  const dep = Array.from({ length: 60 }, (_, k) => A.juliandate(2020, 6, 1) + 2 * k);
+  const arr = Array.from({ length: 80 }, (_, k) => A.juliandate(2020, 11, 1) + 3 * k);
+  const p = A.porkchop("earth", "mars", dep, arr);
+  assert.ok(p.best.c3 > 11 && p.best.c3 < 16, `C3=${p.best.c3}`);
+  const d = A.jd2date(p.best.jdDep), a = A.jd2date(p.best.jdArr);
+  assert.ok(d.year === 2020 && d.month >= 7 && d.month <= 8, `dep ${d.month}/${d.year}`);
+  assert.ok(a.year === 2021 && a.month >= 1 && a.month <= 3, `arr ${a.month}/${a.year}`);
+  assert.equal(p.c3.length, arr.length);
+  assert.equal(p.c3[0]!.length, dep.length);
+  // Arrival before departure is not a transfer.
+  assert.ok(Number.isNaN(p.c3[0]![dep.length - 1]!) || p.tof[0]![dep.length - 1]! > 1);
+});

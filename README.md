@@ -7,7 +7,7 @@ numerical toolbox.
 | App | Path | Stack | What it does |
 | --- | --- | --- | --- |
 | Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
-| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling and plots. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, and a Lambert porkchop-plot tool. |
 | Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
 | Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
 | Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
@@ -44,6 +44,22 @@ h = hohmann(r1, r2, mu_earth)            % struct with dv1, dv2, dv_total, tof
 plot(y(:,1), y(:,2)); axis equal; title('one orbit');
 s = impact(140, 3000, 20e3, deg2rad(45)); fprintf('%.0f Mt\n', s.energy_Mt);
 ```
+
+### Porkchop plots
+
+The **Porkchop tool** button opens a form (bodies, departure and arrival date
+ranges, grid size, quantity, direction) and generates a script you can edit:
+
+```matlab
+jd_dep = linspace(juliandate(2026, 9, 1), juliandate(2027, 1, 31), 80);
+jd_arr = linspace(juliandate(2027, 4, 1), juliandate(2028, 2, 28), 80);
+p = porkchop('earth', 'mars', jd_dep, jd_arr);   % C3, vinf_dep, vinf_arr, tof grids + best_*
+contourf(jd_dep - jd_dep(1), jd_arr - jd_arr(1), p.C3, [8 10 12 15 20 30 60]);
+```
+
+Planet positions come from JPL's approximate Keplerian mean elements (valid
+1800–2050, Standish); `ephemeris('mars', jd)` exposes them directly, and
+`juliandate`, `jd2date` and `datestr` convert dates.
 
 Type `help` in the console for the full function list. The interpreter supports
 MATLAB's matrix literals (including whitespace-separated elements and `'`

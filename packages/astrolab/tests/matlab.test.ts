@@ -134,3 +134,21 @@ test("strings and sprintf", () => {
   assert.equal(vars.get("u"), "CERES");
   assert.equal(out, "1,2,3,\n");
 });
+
+test("porkchop, contour and ind2sub from the console", () => {
+  const { vars, plots, out } = run(`
+    jd_dep = linspace(juliandate(2020,6,1), juliandate(2020,9,30), 12);
+    jd_arr = linspace(juliandate(2020,11,1), juliandate(2021,6,30), 14);
+    p = porkchop('earth', 'mars', jd_dep, jd_arr);
+    [zmin, k] = min(p.C3(:)); [i, j] = ind2sub(size(p.C3), k);
+    contourf(jd_dep, jd_arr, p.C3, 5); hold on; plot(jd_dep(j), jd_arr(i), 'wo');
+    fprintf('%s\\n', datestr(p.best_jd_dep));
+  `);
+  const C3 = vars.get("p") as { fields: Map<string, M.Matrix> };
+  assert.equal(C3.fields.get("C3")!.rows, 14);
+  assert.ok(val(vars, "zmin")[0]! < 20);
+  const last = plots.at(-1)!;
+  assert.ok(last.contour && last.contour.filled && last.contour.levels.length === 5);
+  assert.equal(last.series.length, 1);
+  assert.match(out, /^2020-0[78]-\d\d\n$/);
+});

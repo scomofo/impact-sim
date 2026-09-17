@@ -169,3 +169,23 @@ select {
     grid-template-areas: "console" "editor" "figure" "vars";
   }
 }
+
+dialog.tool {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 22px;
+  width: min(560px, calc(100vw - 32px));
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+}
+dialog.tool::backdrop { background: rgba(0,0,0,0.55); }
+.tool-title { font-family: var(--font-display); font-size: 22px; margin-bottom: 4px; }
+.tool-help { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.tool-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.tool-grid input, .tool-grid select {
+  background: var(--elevated); color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 8px; font: inherit; font-size: 13px; color-scheme: dark;
+}
+.tool-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

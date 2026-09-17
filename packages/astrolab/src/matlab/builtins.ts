@@ -194,7 +194,7 @@ def("max", (a, nargout) => {
   const v = M.max(m);
   if (nargout < 2) return v;
   const lin = M.isVector(m) ? arr(m) : null;
-  if (lin) { let k = 0; lin.forEach((x, i) => { if (x > lin[k]!) k = i; }); return [v, M.toMatrix(k + 1)]; }
+  if (lin) { let k = -1; lin.forEach((x, i) => { if (!Number.isNaN(x) && (k < 0 || x > lin[k]!)) k = i; }); return [v, M.toMatrix(k + 1)]; }
   const idx = M.matrix(1, m.cols);
   for (let j = 0; j < m.cols; j++) { let k = 0; for (let i = 1; i < m.rows; i++) if (M.get(m, i, j) > M.get(m, k, j)) k = i; idx.data[j] = k + 1; }
   return [v, idx];
@@ -205,7 +205,7 @@ def("min", (a, nargout) => {
   const v = M.min(m);
   if (nargout < 2) return v;
   const lin = M.isVector(m) ? arr(m) : null;
-  if (lin) { let k = 0; lin.forEach((x, i) => { if (x < lin[k]!) k = i; }); return [v, M.toMatrix(k + 1)]; }
+  if (lin) { let k = -1; lin.forEach((x, i) => { if (!Number.isNaN(x) && (k < 0 || x < lin[k]!)) k = i; }); return [v, M.toMatrix(k + 1)]; }
   const idx = M.matrix(1, m.cols);
   for (let j = 0; j < m.cols; j++) { let k = 0; for (let i = 1; i < m.rows; i++) if (M.get(m, i, j) < M.get(m, k, j)) k = i; idx.data[j] = k + 1; }
   return [v, idx];
@@ -229,6 +229,15 @@ def("sort", (a, nargout) => {
   const shape = (v: number[]) => (m.rows === 1 ? M.rowvec(v) : M.colvec(v));
   return nargout >= 2 ? [shape(sorted), shape(idx.map((i) => i + 1))] : shape(sorted);
 });
+def("ind2sub", (a, nargout) => {
+  const sz = arr(mat(a, 0, "size"));
+  const rows = sz[0] ?? 1;
+  const ks = mat(a, 1, "index");
+  const rr = M.map(ks, (k) => ((k - 1) % rows) + 1);
+  const cc = M.map(ks, (k) => Math.floor((k - 1) / rows) + 1);
+  return nargout >= 2 ? [rr, cc] : ks;
+}, "[row, col] = ind2sub(size(A), k)");
+def("sub2ind", (a) => { const sz = arr(mat(a, 0, "size")); const rows = sz[0] ?? 1; return M.elementwise(mat(a, 1, "row"), mat(a, 2, "col"), (i, j) => (j - 1) * rows + i); });
 def("unique", (a) => { const m = mat(a, 0, "A"); const u = [...new Set(arr(m))].sort((x, y) => x - y); return m.rows === 1 ? M.rowvec(u) : M.colvec(u); });
 def("numel", (a) => M.toMatrix(typeof a[0] === "string" ? a[0].length : M.numel(mat(a, 0, "A"))));
 
@@ -462,6 +471,44 @@ def("kepler_propagate", (a) => {
   return [M.colvec(sv.r), M.colvec(sv.v)];
 }, "[r, v] = kepler_propagate(r0, v0, mu, dt)");
 
+// ---- ephemerides & porkchop ---------------------------------------------------
+
+const planetId = (v: Value | undefined, what: string): A.PlanetId => {
+  if (typeof v !== "string") throw new RuntimeError(`${what} must be a planet name, e.g. 'earth'`);
+  const id = v.toLowerCase();
+  if (!(A.PLANET_IDS as readonly string[]).includes(id)) throw new RuntimeError(`${what}: unknown planet '${v}' (use ${A.PLANET_IDS.join(", ")})`);
+  return id as A.PlanetId;
+};
+def("juliandate", (a) => {
+  if (a.length === 1) { const m = mat(a, 0, "date"); const d = arr(m); return M.toMatrix(A.juliandate(d[0] ?? 2000, d[1] ?? 1, d[2] ?? 1, d[3] ?? 0, d[4] ?? 0, d[5] ?? 0)); }
+  return M.toMatrix(A.juliandate(num(a, 0, "year"), num(a, 1, "month"), num(a, 2, "day"), a.length > 3 ? num(a, 3, "hour") : 0, a.length > 4 ? num(a, 4, "minute") : 0, a.length > 5 ? num(a, 5, "second") : 0));
+}, "jd = juliandate(year, month, day, [h, m, s]) or juliandate([y m d])");
+def("jd2date", (a) => { const d = A.jd2date(num(a, 0, "jd")); return M.rowvec([d.year, d.month, d.day, d.hour, d.minute, d.second]); }, "[y m d h mi s] = jd2date(jd)");
+def("datestr", (a) => {
+  const m = mat(a, 0, "jd");
+  const one = (jd: number) => { const d = A.jd2date(jd + 1e-9); return `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`; };
+  return arr(m).map(one).join("\n");
+}, "s = datestr(jd) → 'yyyy-mm-dd'");
+def("ephemeris", (a) => {
+  const body = planetId(a[0], "body");
+  const jd = mat(a, 1, "jd");
+  if (M.isScalar(jd)) { const sv = A.planetState(body, jd.data[0]!); return [M.colvec(sv.r), M.colvec(sv.v)]; }
+  const R = M.matrix(M.numel(jd), 3), V = M.matrix(M.numel(jd), 3);
+  arr(jd).forEach((t, i) => { const sv = A.planetState(body, t); R.data.set(sv.r, i * 3); V.data.set(sv.v, i * 3); });
+  return [R, V];
+}, "[r, v] = ephemeris('mars', jd) heliocentric ecliptic J2000 state, m and m/s");
+def("porkchop", (a, nargout) => {
+  const from = planetId(a[0], "departure body"), to = planetId(a[1], "arrival body");
+  const jdDep = arr(mat(a, 2, "departure dates")), jdArr = arr(mat(a, 3, "arrival dates"));
+  if (jdDep.length * jdArr.length > 250000) throw new RuntimeError("porkchop: grid too large (limit 250000 points)");
+  const pro = a.length > 4 ? (typeof a[4] === "string" ? a[4].toLowerCase() !== "retro" : toNumber(a[4]!) !== 0) : true;
+  const p = A.porkchop(from, to, jdDep, jdArr, pro);
+  const grid = (g: number[][]) => M.toMatrix(g);
+  const s = struct({ jd_dep: M.rowvec(jdDep), jd_arr: M.colvec(jdArr), C3: grid(p.c3), vinf_dep: grid(p.vinfDep), vinf_arr: grid(p.vinfArr), tof: grid(p.tof),
+    best_C3: p.best.c3, best_vinf_arr: p.best.vinfArr, best_jd_dep: p.best.jdDep, best_jd_arr: p.best.jdArr, best_tof: p.best.tof });
+  return nargout >= 2 ? [grid(p.c3), grid(p.vinfArr), grid(p.tof)] : s;
+}, "s = porkchop('earth', 'mars', jd_dep, jd_arr) → C3 [km^2/s^2], vinf_arr [km/s], tof [days] grids");
+
 // ---- impacts -----------------------------------------------------------------
 
 def("impact", (a) => {
@@ -581,10 +628,10 @@ def("help", (a, _n, interp) => {
   const groups: Record<string, string[]> = { "Orbital mechanics": [], Impacts: [], Solvers: [], "Matrices & maths": [], Plotting: [] };
   for (const [name, f] of fns) {
     const h = (f as FunctionValue & { help?: string }).help ?? "";
-    if (["kepler2cart", "cart2kepler", "keplerE", "mean2true", "true2mean", "period", "visviva", "vcirc", "vesc", "hohmann", "bielliptic", "planechange", "synodic", "soi", "hill", "lambert", "twobody", "cr3bp", "jacobi", "lagrange", "propagate", "kepler_propagate"].includes(name)) groups["Orbital mechanics"]!.push(name);
+    if (["juliandate", "jd2date", "datestr", "ephemeris", "porkchop", "kepler2cart", "cart2kepler", "keplerE", "mean2true", "true2mean", "period", "visviva", "vcirc", "vesc", "hohmann", "bielliptic", "planechange", "synodic", "soi", "hill", "lambert", "twobody", "cr3bp", "jacobi", "lagrange", "propagate", "kepler_propagate"].includes(name)) groups["Orbital mechanics"]!.push(name);
     else if (["impact", "overpressure", "thermal", "fireball"].includes(name)) groups["Impacts"]!.push(name);
     else if (["ode45", "ode4", "odeset", "fzero", "fminsearch", "fminbnd", "integral", "trapz", "interp1", "polyfit", "polyval", "roots"].includes(name)) groups["Solvers"]!.push(name);
-    else if (["plot", "semilogy", "semilogx", "loglog", "hold", "figure", "xlabel", "ylabel", "title", "legend", "grid", "axis", "clf", "close"].includes(name)) groups["Plotting"]!.push(name);
+    else if (["plot", "semilogy", "semilogx", "loglog", "contour", "contourf", "hold", "figure", "xlabel", "ylabel", "title", "legend", "grid", "axis", "clf", "close"].includes(name)) groups["Plotting"]!.push(name);
     else if (!h.includes("m^3") && !/^(R_|mu_)/.test(name)) groups["Matrices & maths"]!.push(name);
   }
   interp.host.print(
@@ -597,7 +644,7 @@ def("help", (a, _n, interp) => {
 
 function plotImpl(a: Value[], interp: Interpreter, transform?: "semilogy" | "semilogx" | "loglog"): void {
   const st = interp.plotState;
-  if (!st.hold) { st.series = []; st.legend = null; }
+  if (!st.hold) { st.series = []; st.legend = null; st.contour = null; }
   let i = 0;
   while (i < a.length) {
     const x = mat(a, i, "x");
@@ -629,10 +676,34 @@ def("plot", (a, _n, interp) => plotImpl(a, interp), "plot(x, y, 'style')");
 def("semilogy", (a, _n, interp) => plotImpl(a, interp, "semilogy"));
 def("semilogx", (a, _n, interp) => plotImpl(a, interp, "semilogx"));
 def("loglog", (a, _n, interp) => plotImpl(a, interp, "loglog"));
+function contourImpl(a: Value[], interp: Interpreter, filled: boolean): void {
+  const st = interp.plotState;
+  let x: Matrix, y: Matrix, z: Matrix, levelArg: Value | undefined;
+  if (a.length >= 3 && M.isMatrix(a[2])) { x = mat(a, 0, "x"); y = mat(a, 1, "y"); z = mat(a, 2, "Z"); levelArg = a[3]; }
+  else { z = mat(a, 0, "Z"); x = M.colon(1, 1, z.cols); y = M.colon(1, 1, z.rows); levelArg = a[1]; }
+  if (M.numel(x) !== z.cols || M.numel(y) !== z.rows) throw new RuntimeError(`contour: Z must be ${M.numel(y)}x${M.numel(x)} for these x and y, got ${z.rows}x${z.cols}`);
+  const zs = M.toArray(z);
+  const finiteZ = z.data.filter((v) => Number.isFinite(v));
+  let levels: number[];
+  if (levelArg !== undefined && M.isMatrix(levelArg) && M.numel(levelArg) > 1) levels = arr(levelArg);
+  else {
+    const n = levelArg !== undefined ? toNumber(levelArg, "level count") : 10;
+    const lo = Math.min(...finiteZ), hi = Math.max(...finiteZ);
+    levels = Array.from({ length: n }, (_, i) => lo + ((hi - lo) * (i + 1)) / (n + 1));
+  }
+  if (!st.hold) { st.series = []; st.legend = null; }
+  st.contour = { x: arr(x), y: arr(y), z: zs, levels, filled };
+  (st as { scale?: string }).scale = "linear";
+  interp.host.plot?.(st);
+}
+def("contour", (a, _n, interp) => contourImpl(a, interp, false), "contour(x, y, Z, [n | levels])");
+def("contourf", (a, _n, interp) => contourImpl(a, interp, true), "contourf(x, y, Z, [n | levels]) filled contours");
+def("colorbar", () => {});
+def("colormap", () => {});
 def("hold", (a, _n, interp) => { const s = a.length ? str(a, 0, "on|off") : "toggle"; interp.plotState.hold = s === "on" ? true : s === "off" ? false : !interp.plotState.hold; });
-def("figure", (_a, _n, interp) => { Object.assign(interp.plotState, { series: [], title: "", xlabel: "", ylabel: "", legend: null, hold: false }); interp.host.plot?.(interp.plotState); });
-def("clf", (_a, _n, interp) => { interp.plotState.series = []; interp.host.plot?.(interp.plotState); });
-def("close", (_a, _n, interp) => { interp.plotState.series = []; interp.host.plot?.(interp.plotState); });
+def("figure", (_a, _n, interp) => { Object.assign(interp.plotState, { series: [], contour: null, title: "", xlabel: "", ylabel: "", legend: null, hold: false }); interp.host.plot?.(interp.plotState); });
+def("clf", (_a, _n, interp) => { interp.plotState.series = []; interp.plotState.contour = null; interp.host.plot?.(interp.plotState); });
+def("close", (_a, _n, interp) => { interp.plotState.series = []; interp.plotState.contour = null; interp.host.plot?.(interp.plotState); });
 def("xlabel", (a, _n, interp) => { interp.plotState.xlabel = str(a, 0, "label"); interp.host.plot?.(interp.plotState); });
 def("ylabel", (a, _n, interp) => { interp.plotState.ylabel = str(a, 0, "label"); interp.host.plot?.(interp.plotState); });
 def("title", (a, _n, interp) => { interp.plotState.title = str(a, 0, "title"); interp.host.plot?.(interp.plotState); });

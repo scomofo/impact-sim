@@ -5,6 +5,26 @@ export interface Example {
 
 export const EXAMPLES: Example[] = [
   {
+    title: "Porkchop plot Earth → Mars (2026 window)",
+    code: `% Lambert porkchop: departure C3 over launch and arrival dates
+jd_dep = juliandate(2026, 9, 1) : 3 : juliandate(2027, 1, 31);
+jd_arr = juliandate(2027, 4, 1) : 4 : juliandate(2028, 2, 28);
+p = porkchop('earth', 'mars', jd_dep, jd_arr);
+
+fprintf('min C3 = %.1f km^2/s^2, depart %s, arrive %s, %d days\\n', ...
+  p.best_C3, datestr(p.best_jd_dep), datestr(p.best_jd_arr), round(p.best_tof));
+fprintf('arrival v-infinity there: %.2f km/s\\n', p.best_vinf_arr);
+
+% Days after the first departure date on the axes; contours in C3
+contourf(jd_dep - jd_dep(1), jd_arr - jd_arr(1), p.C3, [8 10 12 15 20 25 30 40 60 100]);
+hold on;
+plot(p.best_jd_dep - jd_dep(1), p.best_jd_arr - jd_arr(1), 'wo');
+xlabel(['days after ' datestr(jd_dep(1))]); ylabel(['days after ' datestr(jd_arr(1))]);
+title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
+
+% Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
+  },
+  {
     title: "Hohmann transfer LEO → GEO",
     code: `% Hohmann transfer from a 300 km parking orbit to geostationary altitude
 r1 = R_earth + 300e3;

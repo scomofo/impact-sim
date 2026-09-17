@@ -1,6 +1,7 @@
 import { createConsole, formatValue, RuntimeError, type PlotState, type Value } from "@orbital-suite/astrolab";
 import { isMatrix, isScalar, format, numel } from "@orbital-suite/astrolab";
 import { EXAMPLES } from "./examples";
+import { porkchopScript, PLANETS } from "./porkchop";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -31,7 +32,7 @@ const interp = createConsole({
   print: (s) => append(s),
   plot: (state) => {
     lastPlot = state;
-    figureEmpty.classList.toggle("hidden", state.series.length > 0);
+    figureEmpty.classList.toggle("hidden", state.series.length > 0 || state.contour !== null);
     drawFigure(canvas, state);
   },
   clear: () => { output.textContent = ""; },
@@ -109,6 +110,51 @@ for (const [i, ex] of EXAMPLES.entries()) {
 examples.addEventListener("change", () => {
   const ex = EXAMPLES[Number(examples.value)];
   if (ex) editor.value = ex.code;
+});
+
+// ---- Porkchop tool -------------------------------------------------------------
+const dialog = $<HTMLDialogElement>("porkchop");
+const form = $<HTMLFormElement>("porkchop-form");
+for (const name of ["from", "to"] as const) {
+  const sel = form.elements.namedItem(name) as HTMLSelectElement;
+  for (const p of PLANETS) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p[0]!.toUpperCase() + p.slice(1);
+    sel.appendChild(opt);
+  }
+}
+(form.elements.namedItem("from") as HTMLSelectElement).value = "earth";
+(form.elements.namedItem("to") as HTMLSelectElement).value = "mars";
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const today = new Date();
+const inDays = (n: number) => iso(new Date(today.getTime() + n * 86400e3));
+(form.elements.namedItem("dep0") as HTMLInputElement).value = inDays(0);
+(form.elements.namedItem("dep1") as HTMLInputElement).value = inDays(540);
+(form.elements.namedItem("arr0") as HTMLInputElement).value = inDays(150);
+(form.elements.namedItem("arr1") as HTMLInputElement).value = inDays(900);
+
+function buildScript(): string | null {
+  const data = new FormData(form);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const from = get("from"), to = get("to");
+  if (from === to) { append("Porkchop: departure and arrival bodies must differ.\n", "err"); return null; }
+  const dates = ["dep0", "dep1", "arr0", "arr1"].map((k) => get(k));
+  if (dates.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) { append("Porkchop: enter all four dates.\n", "err"); return null; }
+  if (dates[0]! >= dates[1]! || dates[2]! >= dates[3]!) { append("Porkchop: each range must end after it starts.\n", "err"); return null; }
+  const n = Math.min(300, Math.max(10, Number(get("n")) || 80));
+  return porkchopScript({ from, to, dep: [dates[0]!, dates[1]!], arr: [dates[2]!, dates[3]!], n, what: get("what") as "C3" | "vinf_arr" | "total", retro: get("dir") === "retro" });
+}
+$("porkchop-open").addEventListener("click", () => dialog.showModal());
+$("porkchop-cancel").addEventListener("click", () => dialog.close());
+$("porkchop-insert").addEventListener("click", () => { const s = buildScript(); if (s) { editor.value = s; dialog.close(); } });
+form.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildScript();
+  if (!s) return;
+  editor.value = s;
+  dialog.close();
+  run(s, "porkchop tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);

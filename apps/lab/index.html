@@ -24,6 +24,7 @@
             Examples
             <select id="examples"></select>
           </label>
+          <button id="porkchop-open" class="btn">Porkchop tool</button>
           <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
           <button id="clear" class="btn">Clear</button>
           <a class="btn link" href="../index.html">Suite</a>
@@ -53,6 +54,32 @@
         </section>
       </main>
     </div>
+    <dialog id="porkchop" class="tool">
+      <form id="porkchop-form" method="dialog">
+        <div class="tool-title">Lambert porkchop plot</div>
+        <p class="tool-help">Grid of Lambert transfers between two planets. Colour is departure C3 (km²/s²); the white circle marks the grid minimum. Uses JPL approximate mean elements (1800–2050).</p>
+        <div class="tool-grid">
+          <label>Depart from <select name="from"></select></label>
+          <label>Arrive at <select name="to"></select></label>
+          <label>Departure start <input name="dep0" type="date" required /></label>
+          <label>Departure end <input name="dep1" type="date" required /></label>
+          <label>Arrival start <input name="arr0" type="date" required /></label>
+          <label>Arrival end <input name="arr1" type="date" required /></label>
+          <label>Grid points per axis <input name="n" type="number" min="10" max="300" value="80" /></label>
+          <label>Quantity <select name="what">
+            <option value="C3">Departure C3</option>
+            <option value="vinf_arr">Arrival v∞ (km/s)</option>
+            <option value="total">C3 + arrival v∞² (km²/s²)</option>
+          </select></label>
+          <label>Direction <select name="dir"><option value="pro">Prograde</option><option value="retro">Retrograde</option></select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="porkchop-cancel">Cancel</button>
+          <button type="button" class="btn" id="porkchop-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

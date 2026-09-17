@@ -10,6 +10,7 @@ export {
   struct,
   type Host,
   type PlotState,
+  type ContourField,
   type PlotSeries,
   type Value,
 } from "./matlab/interpreter.ts";
