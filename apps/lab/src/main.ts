@@ -3,6 +3,7 @@ import { isMatrix, isScalar, format, numel } from "@orbital-suite/astrolab";
 import { EXAMPLES } from "./examples";
 import { porkchopScript, PLANETS } from "./porkchop";
 import { transferScript, CENTRAL_BODIES } from "./transfer";
+import { budgetScript } from "./budget";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -192,6 +193,54 @@ tForm.addEventListener("submit", (ev) => {
   editor.value = s;
   tDialog.close();
   run(s, "transfer tool");
+});
+
+// ---- Launch window / dv budget tool -----------------------------------------
+const bDialog = $<HTMLDialogElement>("budget");
+const bForm = $<HTMLFormElement>("budget-form");
+for (const name of ["from", "to"] as const) {
+  const sel = bForm.elements.namedItem(name) as HTMLSelectElement;
+  for (const p of PLANETS) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p[0]!.toUpperCase() + p.slice(1);
+    sel.appendChild(opt);
+  }
+}
+(bForm.elements.namedItem("from") as HTMLSelectElement).value = "earth";
+(bForm.elements.namedItem("to") as HTMLSelectElement).value = "mars";
+(bForm.elements.namedItem("dep0") as HTMLInputElement).value = inDays(0);
+(bForm.elements.namedItem("dep1") as HTMLInputElement).value = inDays(800);
+function buildBudgetScript(): string | null {
+  const data = new FormData(bForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const from = get("from"), to = get("to");
+  if (from === to) { append("Budget: departure and arrival bodies must differ.\n", "err"); return null; }
+  const dep0 = get("dep0"), dep1 = get("dep1");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dep0) || !/^\d{4}-\d{2}-\d{2}$/.test(dep1) || dep0 >= dep1) { append("Budget: enter a departure range that ends after it starts.\n", "err"); return null; }
+  return budgetScript({
+    from, to,
+    parkAlt: Math.max(0, Number(get("park")) || 0),
+    captureAlt: Math.max(0, Number(get("cap")) || 0),
+    captureEcc: Number(get("ecc")),
+    dep: [dep0, dep1],
+    maxTof: Math.max(30, Number(get("tof")) || 400),
+    n: Math.min(300, Math.max(10, Number(get("n")) || 70)),
+    tolerance: Math.max(0, Number(get("tol")) || 0) / 100,
+    margin: Math.max(0, Number(get("margin")) || 0) / 100,
+    isp: Math.max(50, Number(get("isp")) || 320),
+  });
+}
+$("budget-open").addEventListener("click", () => bDialog.showModal());
+$("budget-cancel").addEventListener("click", () => bDialog.close());
+$("budget-insert").addEventListener("click", () => { const s = buildBudgetScript(); if (s) { editor.value = s; bDialog.close(); } });
+bForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildBudgetScript();
+  if (!s) return;
+  editor.value = s;
+  bDialog.close();
+  run(s, "budget tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);

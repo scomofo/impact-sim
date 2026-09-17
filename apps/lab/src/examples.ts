@@ -25,6 +25,29 @@ title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
 % Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
   },
   {
+    title: "Mars mission delta-v budget and launch window",
+    code: `% Price a Mars orbiter: parking orbit burn + capture burn over the 2026 window
+jd_dep = linspace(juliandate(2026, 8, 1), juliandate(2027, 2, 1), 60);
+jd_arr = linspace(juliandate(2027, 3, 1), juliandate(2028, 3, 1), 60);
+p = porkchop('earth', 'mars', jd_dep, jd_arr);
+dv_dep = escape_dv(p.vinf_dep * 1e3, R_earth + 300e3, mu_earth);
+dv_cap = capture_dv(p.vinf_arr * 1e3, R_mars + 400e3, mu_mars, 0);   % circular capture
+dv_tot = dv_dep + dv_cap;
+[dv_min, k] = min(dv_tot(:)); [i, j] = ind2sub(size(dv_tot), k);
+fprintf('cheapest: %.0f m/s (dep %.0f + cap %.0f), leave %s, arrive %s\\n', ...
+  dv_min, dv_dep(i,j), dv_cap(i,j), datestr(jd_dep(j)), datestr(jd_arr(i)));
+fprintf('propellant fraction at Isp 320 s: %.0f%%\\n', 100 * prop_fraction(dv_min, 320));
+
+best = min(dv_tot);                        % best arrival for each departure date
+open = jd_dep(best <= 1.1 * dv_min);
+fprintf('10%% window: %s to %s (%d days)\\n', datestr(open(1)), datestr(open(end)), round(open(end) - open(1)));
+plot(jd_dep - jd_dep(1), best / 1e3, 'b-'); hold on;
+plot(jd_dep - jd_dep(1), 1.1 * dv_min / 1e3 * ones(size(jd_dep)), 'r--');
+xlabel(['days after ' datestr(jd_dep(1))]); ylabel('total dv (km/s)');
+title('Earth-Mars orbiter: best total dv per departure date'); grid on;
+% The Budget tool (top bar) builds this with margins, flyby/elliptical capture and any planet pair.`,
+  },
+  {
     title: "Hohmann vs bi-elliptic with plane change",
     code: `% When does a bi-elliptic transfer beat Hohmann? Sweep the radius ratio.
 mu = mu_earth; r1 = R_earth + 300e3;

@@ -208,6 +208,19 @@ export function propagateKepler(sv: StateVector, mu: number, dt: number): StateV
   return kepler2cart({ ...el, nu }, mu);
 }
 
+/** Δv to leave a circular parking orbit of radius r onto a hyperbola with excess speed vinf (patched conics). */
+export const escapeDeltaV = (vinf: number, r: number, mu: number): number => Math.sqrt(vinf * vinf + (2 * mu) / r) - Math.sqrt(mu / r);
+
+/** Δv to capture from excess speed vinf into an orbit with periapsis rp and eccentricity e (0 = circular). */
+export function captureDeltaV(vinf: number, rp: number, mu: number, e = 0): number {
+  const vHyp = Math.sqrt(vinf * vinf + (2 * mu) / rp);
+  const vOrbit = Math.sqrt((mu * (1 + e)) / rp);
+  return vHyp - vOrbit;
+}
+
+/** Tsiolkovsky: propellant mass fraction for Δv at specific impulse isp (s). */
+export const propellantFraction = (dv: number, isp: number): number => 1 - Math.exp(-dv / (isp * 9.80665));
+
 export interface HohmannResult {
   /** Burn to enter the transfer ellipse. */
   dv1: number;

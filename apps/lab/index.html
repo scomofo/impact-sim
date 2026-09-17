@@ -26,6 +26,7 @@
           </label>
           <button id="porkchop-open" class="btn">Porkchop tool</button>
           <button id="transfer-open" class="btn">Transfer tool</button>
+          <button id="budget-open" class="btn">Budget tool</button>
           <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
           <button id="clear" class="btn">Clear</button>
           <a class="btn link" href="../index.html">Suite</a>
@@ -97,6 +98,36 @@
         <div class="tool-actions">
           <button type="button" class="btn" id="transfer-cancel">Cancel</button>
           <button type="button" class="btn" id="transfer-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="budget" class="tool">
+      <form id="budget-form" method="dialog">
+        <div class="tool-title">Launch window &amp; Δv budget</div>
+        <p class="tool-help">Searches departure dates for the cheapest interplanetary transfer, prices the departure and capture burns with patched conics, adds a margin, and reports the launch window within a tolerance of the minimum plus the propellant fraction.</p>
+        <div class="tool-grid">
+          <label>Depart from <select name="from"></select></label>
+          <label>Arrive at <select name="to"></select></label>
+          <label>Parking orbit altitude (km) <input name="park" type="number" step="any" value="300" /></label>
+          <label>Capture periapsis altitude (km) <input name="cap" type="number" step="any" value="400" /></label>
+          <label>Capture orbit <select name="ecc">
+            <option value="0">Circular</option>
+            <option value="0.5">Elliptical e = 0.5</option>
+            <option value="0.9">Highly elliptical e = 0.9</option>
+            <option value="-1">Flyby (no capture burn)</option>
+          </select></label>
+          <label>Max flight time (days) <input name="tof" type="number" min="30" value="400" /></label>
+          <label>Departure search start <input name="dep0" type="date" required /></label>
+          <label>Departure search end <input name="dep1" type="date" required /></label>
+          <label>Window tolerance (% above minimum) <input name="tol" type="number" step="any" min="0" value="10" /></label>
+          <label>Burn margin (%) <input name="margin" type="number" step="any" min="0" value="5" /></label>
+          <label>Specific impulse (s) <input name="isp" type="number" min="50" value="320" /></label>
+          <label>Grid points per axis <input name="n" type="number" min="10" max="300" value="70" /></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="budget-cancel">Cancel</button>
+          <button type="button" class="btn" id="budget-insert">Insert script</button>
           <button type="submit" class="btn primary">Generate &amp; run</button>
         </div>
       </form>

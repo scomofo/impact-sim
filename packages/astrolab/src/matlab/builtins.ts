@@ -432,6 +432,9 @@ def("vcirc", (a) => M.map(mat(a, 0, "r"), (r) => A.circularSpeed(r, num(a, 1, "m
 def("vesc", (a) => M.map(mat(a, 0, "r"), (r) => A.escapeSpeed(r, num(a, 1, "mu"))));
 def("hohmann", (a) => { const h = A.hohmann(num(a, 0, "r1"), num(a, 1, "r2"), num(a, 2, "mu")); return struct({ dv1: h.dv1, dv2: h.dv2, dv_total: h.dvTotal, tof: h.tof, a_transfer: h.aTransfer }); }, "s = hohmann(r1, r2, mu)");
 def("bielliptic", (a) => { const h = A.biElliptic(num(a, 0, "r1"), num(a, 1, "r2"), num(a, 2, "rB"), num(a, 3, "mu")); return struct({ dv1: h.dv1, dv2: h.dv2, dv3: h.dv3, dv_total: h.dvTotal, tof: h.tof }); });
+def("escape_dv", (a) => M.map(mat(a, 0, "vinf"), (v) => A.escapeDeltaV(v, num(a, 1, "r_park"), num(a, 2, "mu"))), "dv = escape_dv(vinf, r_park, mu) from circular parking orbit, SI");
+def("capture_dv", (a) => M.map(mat(a, 0, "vinf"), (v) => A.captureDeltaV(v, num(a, 1, "r_p"), num(a, 2, "mu"), a.length > 3 ? num(a, 3, "e") : 0)), "dv = capture_dv(vinf, r_periapsis, mu, [e]) into an orbit of eccentricity e");
+def("prop_fraction", (a) => M.map(mat(a, 0, "dv"), (v) => A.propellantFraction(v, num(a, 1, "isp"))), "f = prop_fraction(dv, isp) Tsiolkovsky propellant mass fraction");
 def("planechange", (a) => M.toMatrix(A.planeChange(num(a, 0, "v"), num(a, 1, "di"))));
 def("synodic", (a) => M.toMatrix(A.synodicPeriod(num(a, 0, "T1"), num(a, 1, "T2"))));
 def("soi", (a) => M.toMatrix(A.sphereOfInfluence(num(a, 0, "d"), num(a, 1, "m2"), num(a, 2, "m1"))));
@@ -628,7 +631,7 @@ def("help", (a, _n, interp) => {
   const groups: Record<string, string[]> = { "Orbital mechanics": [], Impacts: [], Solvers: [], "Matrices & maths": [], Plotting: [] };
   for (const [name, f] of fns) {
     const h = (f as FunctionValue & { help?: string }).help ?? "";
-    if (["juliandate", "jd2date", "datestr", "ephemeris", "porkchop", "kepler2cart", "cart2kepler", "keplerE", "mean2true", "true2mean", "period", "visviva", "vcirc", "vesc", "hohmann", "bielliptic", "planechange", "synodic", "soi", "hill", "lambert", "twobody", "cr3bp", "jacobi", "lagrange", "propagate", "kepler_propagate"].includes(name)) groups["Orbital mechanics"]!.push(name);
+    if (["juliandate", "jd2date", "datestr", "ephemeris", "porkchop", "kepler2cart", "cart2kepler", "keplerE", "mean2true", "true2mean", "period", "visviva", "vcirc", "vesc", "hohmann", "bielliptic", "planechange", "synodic", "soi", "hill", "lambert", "escape_dv", "capture_dv", "prop_fraction", "twobody", "cr3bp", "jacobi", "lagrange", "propagate", "kepler_propagate"].includes(name)) groups["Orbital mechanics"]!.push(name);
     else if (["impact", "overpressure", "thermal", "fireball"].includes(name)) groups["Impacts"]!.push(name);
     else if (["ode45", "ode4", "odeset", "fzero", "fminsearch", "fminbnd", "integral", "trapz", "interp1", "polyfit", "polyval", "roots"].includes(name)) groups["Solvers"]!.push(name);
     else if (["plot", "semilogy", "semilogx", "loglog", "contour", "contourf", "hold", "figure", "xlabel", "ylabel", "title", "legend", "grid", "axis", "clf", "close"].includes(name)) groups["Plotting"]!.push(name);

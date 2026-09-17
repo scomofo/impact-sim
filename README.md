@@ -7,7 +7,7 @@ numerical toolbox.
 | App | Path | Stack | What it does |
 | --- | --- | --- | --- |
 | Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
-| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool and a Hohmann/bi-elliptic transfer planner. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool, a Hohmann/bi-elliptic transfer planner and a launch-window/Δv-budget tool. |
 | Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
 | Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
 | Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
@@ -70,6 +70,15 @@ slowest burn, and plots either Δv against apoapsis ratio or the orbit geometry.
 The underlying functions are `hohmann`, `bielliptic`, `planechange`,
 `visviva` and `vcirc`.
 
+### Launch window and Δv budget
+
+The **Budget tool** button searches departure dates for the cheapest transfer
+between two planets, prices the departure burn from a parking orbit and the
+capture burn (circular, elliptical or flyby) with patched conics, applies a
+burn margin, reports the launch window within a tolerance of the minimum and
+the propellant fraction at a given specific impulse. Underlying functions:
+`porkchop`, `escape_dv`, `capture_dv`, `prop_fraction`.
+
 Type `help` in the console for the full function list. The interpreter supports
 MATLAB's matrix literals (including whitespace-separated elements and `'`
 transpose), `end` and logical indexing, `:` ranges, element-wise and matrix
@@ -84,7 +93,7 @@ Node 22.22.2+ or 24.15.0+ is required.
 
 ```sh
 npm run check   # node --check for the impact app, tsc --noEmit for the rest
-npm test        # impact model tests (63) and astrolab tests (31)
+npm test        # impact model tests (63) and astrolab tests (35)
 npm run build
 ```
 

@@ -141,3 +141,17 @@ test("Earth–Mars 2020 porkchop minimum matches the real launch window", () => 
   // Arrival before departure is not a transfer.
   assert.ok(Number.isNaN(p.c3[0]![dep.length - 1]!) || p.tof[0]![dep.length - 1]! > 1);
 });
+
+test("patched-conic departure and capture burns", () => {
+  // Earth departure at C3 = 12 km²/s² from a 300 km parking orbit ≈ 3.74 km/s.
+  const dv = A.escapeDeltaV(Math.sqrt(12) * 1e3, A.RADIUS.earth + 300e3, A.MU.earth);
+  assert.ok(dv > 3700 && dv < 3780, `dv=${dv}`);
+  // Zero excess speed reduces to circular-to-escape: (sqrt(2) - 1) v_circ.
+  const r = 7000e3;
+  close(A.escapeDeltaV(0, r, A.MU.earth), (Math.SQRT2 - 1) * A.circularSpeed(r, A.MU.earth), 1e-12);
+  // Capture into a circular orbit costs more than into an eccentric one at the same periapsis.
+  const circ = A.captureDeltaV(2.6e3, A.RADIUS.mars + 400e3, A.MU.mars, 0);
+  const ell = A.captureDeltaV(2.6e3, A.RADIUS.mars + 400e3, A.MU.mars, 0.9);
+  assert.ok(circ > 1900 && circ < 2200 && ell < circ, `circ=${circ} ell=${ell}`);
+  close(A.propellantFraction(9.80665 * 320 * Math.LN2, 320), 0.5, 1e-12);
+});
