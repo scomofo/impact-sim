@@ -29,6 +29,7 @@
           <button id="budget-open" class="btn">Budget tool</button>
           <button id="entry-open" class="btn">Entry tool</button>
           <button id="flyby-open" class="btn">Flyby tool</button>
+          <button id="station-open" class="btn">Station-keeping tool</button>
           <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
           <button id="clear" class="btn">Clear</button>
           <a class="btn link" href="../index.html">Suite</a>
@@ -182,6 +183,51 @@
         <div class="tool-actions">
           <button type="button" class="btn" id="flyby-cancel">Cancel</button>
           <button type="button" class="btn" id="flyby-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="station" class="tool">
+      <form id="station-form" method="dialog">
+        <div class="tool-title">Station-keeping &amp; orbit maintenance</div>
+        <p class="tool-help">Budgets the Δv and propellant needed to hold an orbit over a mission. LEO: atmospheric drag decay, reboost cadence from an altitude deadband, lifetime if uncontrolled, and J2 nodal drift. GEO: lunisolar north–south drift, triaxiality east–west drift with a longitude box, solar-pressure eccentricity.</p>
+        <div class="tool-grid">
+          <label>Regime <select name="regime"><option value="leo">Low Earth orbit (drag + J2)</option><option value="geo">Geostationary</option></select></label>
+          <label>Mission duration (years) <input name="years" type="number" step="any" min="0.1" value="5" /></label>
+          <label>Spacecraft mass (kg) <input name="mass" type="number" step="any" value="500" /></label>
+          <label>Specific impulse (s) <input name="isp" type="number" step="any" value="220" /></label>
+          <label>Burn margin (%) <input name="margin" type="number" step="any" min="0" value="10" /></label>
+          <label>Figure <select name="plot">
+            <option value="sawtooth">Altitude / longitude vs time with maneuvers</option>
+            <option value="sweep">Annual Δv vs altitude / longitude</option>
+            <option value="lifetime">Uncontrolled decay vs time (LEO)</option>
+          </select></label>
+        </div>
+        <fieldset class="tool-fieldset" data-regime="leo">
+          <legend>LEO</legend>
+          <div class="tool-grid">
+            <label>Altitude (km) <input name="alt" type="number" step="any" value="400" /></label>
+            <label>Inclination (deg) <input name="inc" type="number" step="any" value="51.6" /></label>
+            <label>Drag area (m²) <input name="area" type="number" step="any" value="4" /></label>
+            <label>Drag coefficient <input name="cd" type="number" step="any" value="2.2" /></label>
+            <label>Solar activity <select name="activity"><option value="low">Low (solar minimum)</option><option value="mean" selected>Mean</option><option value="high">High (solar maximum)</option></select></label>
+            <label>Altitude deadband (km) <input name="deadband" type="number" step="any" min="0.1" value="2" /></label>
+          </div>
+        </fieldset>
+        <fieldset class="tool-fieldset" data-regime="geo" hidden>
+          <legend>GEO</legend>
+          <div class="tool-grid">
+            <label>Station longitude (deg E, negative = W) <input name="lon" type="number" step="any" value="-100" /></label>
+            <label>Longitude box half-width (deg) <input name="box" type="number" step="any" min="0.005" value="0.05" /></label>
+            <label>Start year <input name="year" type="number" step="1" value="2027" /></label>
+            <label>Sunlit area (m²) <input name="srparea" type="number" step="any" value="60" /></label>
+            <label>Reflectivity coefficient C_r <input name="cr" type="number" step="any" value="1.3" /></label>
+            <label>Inclination box (deg) <input name="ibox" type="number" step="any" min="0.005" value="0.05" /></label>
+          </div>
+        </fieldset>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="station-cancel">Cancel</button>
+          <button type="button" class="btn" id="station-insert">Insert script</button>
           <button type="submit" class="btn primary">Generate &amp; run</button>
         </div>
       </form>
