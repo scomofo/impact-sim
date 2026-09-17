@@ -4,6 +4,7 @@ import { EXAMPLES } from "./examples";
 import { porkchopScript, PLANETS } from "./porkchop";
 import { transferScript, CENTRAL_BODIES } from "./transfer";
 import { budgetScript } from "./budget";
+import { entryScript, ENTRY_BODIES, ENTRY_PRESETS, type EntrySpec } from "./entrytool";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -241,6 +242,56 @@ bForm.addEventListener("submit", (ev) => {
   editor.value = s;
   bDialog.close();
   run(s, "budget tool");
+});
+
+// ---- Atmospheric entry tool ---------------------------------------------------
+const eDialog = $<HTMLDialogElement>("entry");
+const eForm = $<HTMLFormElement>("entry-form");
+{
+  const body = eForm.elements.namedItem("body") as HTMLSelectElement;
+  for (const b of ENTRY_BODIES) {
+    const opt = document.createElement("option");
+    opt.value = b;
+    opt.textContent = b[0]!.toUpperCase() + b.slice(1);
+    body.appendChild(opt);
+  }
+  body.value = "earth";
+  const preset = eForm.elements.namedItem("preset") as HTMLSelectElement;
+  for (const [key, p] of Object.entries(ENTRY_PRESETS)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = p.label;
+    preset.appendChild(opt);
+  }
+  const fieldOf: Record<string, keyof EntrySpec> = { body: "body", v0: "v0", gamma: "gammaDeg", h0: "h0", mass: "mass", area: "area", cd: "cd", ld: "ld", bank: "bankDeg", rn: "noseRadius", hstop: "hStop", vstop: "vStop" };
+  preset.addEventListener("change", () => {
+    const p = ENTRY_PRESETS[preset.value];
+    if (!p) return;
+    for (const [input, key] of Object.entries(fieldOf)) {
+      const el = eForm.elements.namedItem(input) as HTMLInputElement | HTMLSelectElement;
+      const v = p[key];
+      if (v !== undefined) el.value = String(v);
+    }
+  });
+}
+function buildEntryScript(): string | null {
+  const data = new FormData(eForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const n = (k: string, d: number) => { const v = Number(get(k)); return Number.isFinite(v) && get(k) !== "" ? v : d; };
+  const v0 = n("v0", 0), mass = n("mass", 0), area = n("area", 0), cd = n("cd", 0);
+  if (v0 <= 0 || mass <= 0 || area <= 0 || cd <= 0) { append("Entry: speed, mass, area and CD must be positive.\n", "err"); return null; }
+  return entryScript({ body: get("body"), v0, gammaDeg: n("gamma", -1.5), h0: n("h0", 120), mass, area, cd, ld: n("ld", 0), bankDeg: n("bank", 0), noseRadius: Math.max(0.01, n("rn", 1)), hStop: n("hstop", 0), vStop: Math.max(0, n("vstop", 0)), plot: get("plot") as EntrySpec["plot"] });
+}
+$("entry-open").addEventListener("click", () => eDialog.showModal());
+$("entry-cancel").addEventListener("click", () => eDialog.close());
+$("entry-insert").addEventListener("click", () => { const s = buildEntryScript(); if (s) { editor.value = s; eDialog.close(); } });
+eForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildEntryScript();
+  if (!s) return;
+  editor.value = s;
+  eDialog.close();
+  run(s, "entry tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);

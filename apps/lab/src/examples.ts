@@ -25,6 +25,36 @@ title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
 % Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
   },
   {
+    title: "Entry corridor: g-load and skip-out vs flight-path angle",
+    code: `% Lunar-return capsule: how steep can you enter before the g-load is too high,
+% and how shallow before you skip back out? (Apollo-like capsule, 55 deg bank)
+% Full lift-up skips out until the g-load is already too high, which is why
+% Apollo modulated bank; a fixed 55 deg bank opens a usable corridor.
+opts = struct('m', 5500, 'A', 12, 'CD', 1.3, 'LD', 0.3, 'bank', deg2rad(55), 'rn', 4.7, 'v_stop', 150);
+gammas = -4.5 : -0.25 : -9;
+peak_g = zeros(size(gammas)); skipped = zeros(size(gammas)); qmax = zeros(size(gammas));
+for k = 1:numel(gammas)
+  e = entry('earth', 11000, deg2rad(gammas(k)), 122e3, opts);
+  peak_g(k) = e.peak_decel / g0;
+  qmax(k) = e.peak_qdot / 1e4;
+  skipped(k) = strcmp(e.outcome, 'skipped-out');
+end
+plot(gammas, peak_g, 'r-'); hold on;
+plot(gammas(skipped == 1), peak_g(skipped == 1), 'wo');
+plot(gammas, 12 * ones(size(gammas)), 'k--');
+legend('peak g', 'skips out', '12 g limit');
+xlabel('entry flight-path angle (deg)'); ylabel('peak deceleration (g)');
+title('lunar return corridor, L/D 0.3 at 55 deg bank'); grid on;
+inside = skipped == 0 & peak_g <= 12;
+if any(inside)
+  fprintf('corridor: %.2f to %.2f deg (%.2f deg wide)\\n', max(gammas(inside)), min(gammas(inside)), max(gammas(inside)) - min(gammas(inside)));
+  fprintf('peak heating in corridor: %.0f W/cm^2\\n', max(qmax(inside)));
+else
+  disp('no entry angle satisfies both limits; increase bank or the g limit');
+end
+% The Entry tool (top bar) runs a single trajectory with presets for Apollo, Soyuz, MSL, Huygens and Galileo.`,
+  },
+  {
     title: "Mars mission delta-v budget and launch window",
     code: `% Price a Mars orbiter: parking orbit burn + capture burn over the 2026 window
 jd_dep = linspace(juliandate(2026, 8, 1), juliandate(2027, 2, 1), 60);

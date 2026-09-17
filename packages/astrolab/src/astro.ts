@@ -19,6 +19,7 @@ export const MU = {
   saturn: 3.7931187e16,
   uranus: 5.793939e15,
   neptune: 6.836529e15,
+  titan: 8.978e12,
 } as const;
 
 /** Mean equatorial radii in metres. */
@@ -33,6 +34,7 @@ export const RADIUS = {
   saturn: 6.0268e7,
   uranus: 2.5559e7,
   neptune: 2.4764e7,
+  titan: 2.5747e6,
 } as const;
 
 export const AU = 1.495978707e11;

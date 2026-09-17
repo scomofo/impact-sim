@@ -155,3 +155,37 @@ test("patched-conic departure and capture burns", () => {
   assert.ok(circ > 1900 && circ < 2200 && ell < circ, `circ=${circ} ell=${ell}`);
   close(A.propellantFraction(9.80665 * 320 * Math.LN2, 320), 0.5, 1e-12);
 });
+
+import { entry, ATMOSPHERES, density } from "../src/entry.ts";
+
+test("atmospheric entry reproduces capsule-class loads", () => {
+  const d2r = Math.PI / 180;
+  close(density(ATMOSPHERES.earth!, 0), 1.225, 1e-12);
+  // Ballistic Soyuz-class from LEO: 8–10 g, lands ~2000–2500 km downrange.
+  const soyuz = entry("earth", 7600, -1.5 * d2r, 120e3, { mass: 2900, area: 3.8, cd: 1.3, noseRadius: 2.2, stopSpeed: 200 });
+  assert.equal(soyuz.outcome, "slowed");
+  assert.ok(soyuz.peakDecel / 9.81 > 7 && soyuz.peakDecel / 9.81 < 11, `g=${soyuz.peakDecel / 9.81}`);
+  assert.ok(soyuz.range.at(-1)! > 1500e3 && soyuz.range.at(-1)! < 3000e3);
+  // MSL-class Mars entry: ~9–13 g, laminar peak heating a few tens of W/cm².
+  const msl = entry("mars", 5800, -15.5 * d2r, 125e3, { mass: 3300, area: 15.9, cd: 1.45, ld: 0.24, noseRadius: 2.25, stopSpeed: 400 });
+  assert.equal(msl.outcome, "slowed");
+  assert.ok(msl.peakDecel / 9.81 > 7 && msl.peakDecel / 9.81 < 14, `g=${msl.peakDecel / 9.81}`);
+  assert.ok(msl.peakQdot / 1e4 > 25 && msl.peakQdot / 1e4 < 80, `q=${msl.peakQdot / 1e4}`);
+  // Shallow lifting lunar return skips out; steep one does not.
+  const shallow = entry("earth", 11000, -5 * d2r, 122e3, { mass: 5500, area: 12, cd: 1.3, ld: 0.3, noseRadius: 4.7 });
+  assert.equal(shallow.outcome, "skipped-out");
+  const steep = entry("earth", 11000, -7.5 * d2r, 122e3, { mass: 5500, area: 12, cd: 1.3, ld: 0.3, noseRadius: 4.7, stopSpeed: 150 });
+  assert.equal(steep.outcome, "slowed");
+  assert.ok(steep.peakDecel > shallow.peakDecel);
+  assert.throws(() => entry("pluto", 1, -1, 1, { mass: 1, area: 1, cd: 1 }), /no atmosphere model/);
+});
+
+test("entry is exposed to the console with a struct of options", () => {
+  const { createConsole } = require_index();
+  let out = "";
+  const c = createConsole({ print: (s: string) => (out += s) });
+  c.run("e = entry('earth', 7600, deg2rad(-1.5), 120e3, struct('m', 2900, 'A', 3.8, 'CD', 1.3, 'v_stop', 200)); fprintf('%s %.1f\\n', e.outcome, e.peak_decel / g0);");
+  assert.match(out, /^slowed (8|9|10)\.\d\n$/);
+});
+import * as IDX from "../src/index.ts";
+function require_index() { return IDX; }

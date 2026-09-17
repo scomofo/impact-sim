@@ -3,6 +3,7 @@ export * from "./ode.ts";
 export * from "./numeric.ts";
 export * as astro from "./astro.ts";
 export * as impact from "./impact.ts";
+export * as entry from "./entry.ts";
 export {
   Interpreter,
   RuntimeError,

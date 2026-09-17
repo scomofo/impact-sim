@@ -5,6 +5,7 @@ import type { Matrix } from "../matrix.ts";
 import * as N from "../numeric.ts";
 import * as A from "../astro.ts";
 import * as I from "../impact.ts";
+import * as E from "../entry.ts";
 import { ode45, ode4, type OdeOptions } from "../ode.ts";
 import {
   RuntimeError, formatValue, isFunction, isStruct, logical, struct, toMat, toNumber, typeName,
@@ -512,6 +513,35 @@ def("porkchop", (a, nargout) => {
   return nargout >= 2 ? [grid(p.c3), grid(p.vinfArr), grid(p.tof)] : s;
 }, "s = porkchop('earth', 'mars', jd_dep, jd_arr) → C3 [km^2/s^2], vinf_arr [km/s], tof [days] grids");
 
+// ---- atmospheric entry ---------------------------------------------------------
+
+def("atmosphere", (a) => {
+  const body = str(a, 0, "body").toLowerCase();
+  const atm = E.ATMOSPHERES[body];
+  if (!atm) throw new RuntimeError(`atmosphere: no model for '${body}' (have ${Object.keys(E.ATMOSPHERES).join(", ")})`);
+  if (a.length > 1) return M.map(mat(a, 1, "h"), (h) => E.density(atm, h));
+  return struct({ rho0: atm.rho0, H: atm.H, k_sg: atm.kSG, mu: atm.mu, radius: atm.radius });
+}, "s = atmosphere('mars') exponential model; rho = atmosphere('mars', h) density at altitude h");
+def("entry", (a) => {
+  const body = str(a, 0, "body");
+  const v0 = num(a, 1, "entry speed"), g0 = num(a, 2, "flight-path angle (rad)"), h0 = num(a, 3, "entry altitude");
+  const o = a[4];
+  const g = (k: string, d?: number): number | undefined => {
+    if (o === undefined || !isStruct(o)) return d;
+    const v = o.fields.get(k);
+    return v === undefined ? d : toNumber(v, k);
+  };
+  const mass = g("m") ?? g("mass"), area = g("A") ?? g("area"), cd = g("CD") ?? g("cd");
+  if (mass === undefined || area === undefined || cd === undefined) throw new RuntimeError("entry: options struct needs m, A and CD (use struct('m', 1000, 'A', 4, 'CD', 1.2, ...))");
+  const r = E.entry(body, v0, g0, h0, { mass, area, cd, ld: g("LD", 0), bank: g("bank", 0), noseRadius: g("rn", 1), stopAltitude: g("h_stop", 0), stopSpeed: g("v_stop", 0), maxTime: g("t_max", 3600) });
+  return struct({
+    t: M.colvec(r.t), h: M.colvec(r.h), v: M.colvec(r.v), gamma: M.colvec(r.gamma), range: M.colvec(r.range),
+    decel: M.colvec(r.decel), qdot: M.colvec(r.qdot), heat_load: M.colvec(r.heatLoad), q: M.colvec(r.q),
+    peak_decel: r.peakDecel, peak_qdot: r.peakQdot, total_heat_load: r.totalHeatLoad, beta: r.ballisticCoefficient,
+    outcome: r.outcome, t_end: r.t[r.t.length - 1] ?? 0, v_end: r.v[r.v.length - 1] ?? 0, h_end: r.h[r.h.length - 1] ?? 0, range_end: r.range[r.range.length - 1] ?? 0,
+  });
+}, "s = entry('earth', v0, gamma0, h0, struct('m',..,'A',..,'CD',..,'LD',0,'bank',0,'rn',1,'h_stop',0,'v_stop',0))");
+
 // ---- impacts -----------------------------------------------------------------
 
 def("impact", (a) => {
@@ -632,7 +662,7 @@ def("help", (a, _n, interp) => {
   for (const [name, f] of fns) {
     const h = (f as FunctionValue & { help?: string }).help ?? "";
     if (["juliandate", "jd2date", "datestr", "ephemeris", "porkchop", "kepler2cart", "cart2kepler", "keplerE", "mean2true", "true2mean", "period", "visviva", "vcirc", "vesc", "hohmann", "bielliptic", "planechange", "synodic", "soi", "hill", "lambert", "escape_dv", "capture_dv", "prop_fraction", "twobody", "cr3bp", "jacobi", "lagrange", "propagate", "kepler_propagate"].includes(name)) groups["Orbital mechanics"]!.push(name);
-    else if (["impact", "overpressure", "thermal", "fireball"].includes(name)) groups["Impacts"]!.push(name);
+    else if (["impact", "overpressure", "thermal", "fireball", "entry", "atmosphere"].includes(name)) groups["Impacts"]!.push(name);
     else if (["ode45", "ode4", "odeset", "fzero", "fminsearch", "fminbnd", "integral", "trapz", "interp1", "polyfit", "polyval", "roots"].includes(name)) groups["Solvers"]!.push(name);
     else if (["plot", "semilogy", "semilogx", "loglog", "contour", "contourf", "hold", "figure", "xlabel", "ylabel", "title", "legend", "grid", "axis", "clf", "close"].includes(name)) groups["Plotting"]!.push(name);
     else if (!h.includes("m^3") && !/^(R_|mu_)/.test(name)) groups["Matrices & maths"]!.push(name);
