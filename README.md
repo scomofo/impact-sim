@@ -7,7 +7,7 @@ numerical toolbox.
 | App | Path | Stack | What it does |
 | --- | --- | --- | --- |
 | Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
-| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool, a Hohmann/bi-elliptic transfer planner, a launch-window/Δv-budget tool, an atmospheric-entry tool and a gravity-assist tool. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool, a Hohmann/bi-elliptic transfer planner, a launch-window/Δv-budget tool, an atmospheric-entry tool, a gravity-assist tool and a station-keeping planner. |
 | Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
 | Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
 | Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
@@ -98,6 +98,19 @@ orbit before and after, and plots Δv against closest approach or the velocity
 triangle. Underlying functions: `turn_angle`, `flyby`, `ephemeris`,
 `cart2kepler`.
 
+### Station-keeping and orbit maintenance
+
+The **Station-keeping tool** button budgets the Δv and propellant to hold an
+orbit over a mission. In LEO it uses Vallado's exponential atmosphere with a
+solar-activity knob to give drag decay, the reboost cadence for an altitude
+deadband, the uncontrolled lifetime, and the J2 nodal drift with the
+sun-synchronous inclination for that altitude. In GEO it gives the lunisolar
+north–south drift for the mission years (18.6-year lunar cycle), the
+triaxiality east–west cycle for a longitude box, and the solar-pressure
+eccentricity that eats into that box. Underlying functions: `atm_density`,
+`drag_decay`, `reboost`, `orbit_lifetime`, `j2_rates`, `sunsync_inc`,
+`geo_inc_drift`, `geo_ns`, `geo_ew`, `geo_srp`, `mission_prop`.
+
 Type `help` in the console for the full function list. The interpreter supports
 MATLAB's matrix literals (including whitespace-separated elements and `'`
 transpose), `end` and logical indexing, `:` ranges, element-wise and matrix
@@ -112,7 +125,7 @@ Node 22.22.2+ or 24.15.0+ is required.
 
 ```sh
 npm run check   # node --check for the impact app, tsc --noEmit for the rest
-npm test        # impact model tests (63) and astrolab tests (38)
+npm test        # impact model tests (63) and astrolab tests (45)
 npm run build
 ```
 
@@ -122,4 +135,4 @@ GitHub Actions runs all three for pushes and pull requests.
 
 - `apps/impact` is the original [impact-sim](https://github.com/scomofo/impact-sim) app, moved unchanged into the workspace. See its [README](apps/impact/README.md), [model methods](apps/impact/docs/MODEL.md) and [catalog provenance](apps/impact/docs/CATALOG.md).
 - `apps/libration`, `apps/helios` and `apps/stackyard` carry the simulation code from the [Apoapsis](https://github.com/scomofo/Apoapsis), [Helios](https://github.com/scomofo/Helios) and [Stackyard](https://github.com/scomofo/Stackyard) repositories. Those repositories were generated inside an app-builder sandbox and bundled a large auth/database/PWA scaffold that the simulations never used; only the simulation, HUD and styling sources were kept, each wrapped in a plain Vite + React entry point.
-- `packages/astrolab` follows the formulas in Curtis, *Orbital Mechanics for Engineering Students*; Bate, Mueller & White; Hairer, Nørsett & Wanner (Dormand–Prince); and Collins, Melosh & Marcus (2005) for impact scaling. Tests reproduce worked examples from those sources.
+- `packages/astrolab` follows the formulas in Curtis, *Orbital Mechanics for Engineering Students*; Bate, Mueller & White; Hairer, Nørsett & Wanner (Dormand–Prince); Collins, Melosh & Marcus (2005) for impact scaling; Vallado for the exponential atmosphere, J2 and third-body rates; Wertz & Larson (SMAD) for drag per revolution; and Soop, *Handbook of Geostationary Orbits*, for GEO control cycles. Tests reproduce worked examples and published check values from those sources.

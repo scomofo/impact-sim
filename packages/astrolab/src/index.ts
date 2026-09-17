@@ -4,6 +4,7 @@ export * from "./numeric.ts";
 export * as astro from "./astro.ts";
 export * as impact from "./impact.ts";
 export * as entry from "./entry.ts";
+export * as maintenance from "./maintenance.ts";
 export {
   Interpreter,
   RuntimeError,
