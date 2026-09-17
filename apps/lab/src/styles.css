@@ -189,3 +189,7 @@ dialog.tool::backdrop { background: rgba(0,0,0,0.55); }
   padding: 6px 8px; font: inherit; font-size: 13px; color-scheme: dark;
 }
 .tool-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.tool-fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 12px; margin: 12px 0 0; }
+.tool-fieldset legend { color: var(--muted); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 0 6px; }
+.tool-fieldset[hidden] { display: none; }

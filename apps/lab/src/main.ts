@@ -6,6 +6,7 @@ import { transferScript, CENTRAL_BODIES } from "./transfer";
 import { budgetScript } from "./budget";
 import { entryScript, ENTRY_BODIES, ENTRY_PRESETS, type EntrySpec } from "./entrytool";
 import { flybyScript, type FlybySpec } from "./flybytool";
+import { stationScript, type StationSpec } from "./stationtool";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -327,6 +328,43 @@ fForm.addEventListener("submit", (ev) => {
   editor.value = s;
   fDialog.close();
   run(s, "flyby tool");
+});
+
+// ---- Station-keeping tool --------------------------------------------------------
+const sDialog = $<HTMLDialogElement>("station");
+const sForm = $<HTMLFormElement>("station-form");
+{
+  const regime = sForm.elements.namedItem("regime") as HTMLSelectElement;
+  const sync = () => {
+    for (const fs of sForm.querySelectorAll<HTMLFieldSetElement>(".tool-fieldset")) fs.hidden = fs.dataset.regime !== regime.value;
+  };
+  regime.addEventListener("change", sync);
+  sync();
+}
+function buildStationScript(): string | null {
+  const data = new FormData(sForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const n = (k: string, d: number) => { const v = Number(get(k)); return get(k) !== "" && Number.isFinite(v) ? v : d; };
+  const mass = n("mass", 0), isp = n("isp", 0), years = n("years", 0);
+  if (mass <= 0 || isp <= 0 || years <= 0) { append("Station-keeping: mass, Isp and mission duration must be positive.\n", "err"); return null; }
+  const regime = get("regime") as StationSpec["regime"];
+  if (regime === "leo" && (n("alt", 0) < 150 || n("area", 0) <= 0 || n("cd", 0) <= 0)) { append("Station-keeping: LEO altitude must be at least 150 km with positive drag area and CD.\n", "err"); return null; }
+  return stationScript({
+    regime, years, mass, isp, margin: Math.max(0, n("margin", 0)) / 100, plot: get("plot") as StationSpec["plot"],
+    alt: n("alt", 400), inc: n("inc", 51.6), area: n("area", 4), cd: n("cd", 2.2), activity: get("activity") as StationSpec["activity"], deadband: Math.max(0.1, n("deadband", 2)),
+    lon: n("lon", -100), box: Math.max(0.005, n("box", 0.05)), year: Math.round(n("year", 2027)), srpArea: Math.max(0, n("srparea", 60)), cr: Math.max(0, n("cr", 1.3)), ibox: Math.max(0.005, n("ibox", 0.05)),
+  });
+}
+$("station-open").addEventListener("click", () => sDialog.showModal());
+$("station-cancel").addEventListener("click", () => sDialog.close());
+$("station-insert").addEventListener("click", () => { const s = buildStationScript(); if (s) { editor.value = s; sDialog.close(); } });
+sForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildStationScript();
+  if (!s) return;
+  editor.value = s;
+  sDialog.close();
+  run(s, "station-keeping tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);
