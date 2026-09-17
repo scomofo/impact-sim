@@ -7,7 +7,7 @@ numerical toolbox.
 | App | Path | Stack | What it does |
 | --- | --- | --- | --- |
 | Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
-| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling and plots. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool, a Hohmann/bi-elliptic transfer planner, a launch-window/Δv-budget tool, an atmospheric-entry tool and a gravity-assist tool. |
 | Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
 | Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
 | Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
@@ -45,6 +45,59 @@ plot(y(:,1), y(:,2)); axis equal; title('one orbit');
 s = impact(140, 3000, 20e3, deg2rad(45)); fprintf('%.0f Mt\n', s.energy_Mt);
 ```
 
+### Porkchop plots
+
+The **Porkchop tool** button opens a form (bodies, departure and arrival date
+ranges, grid size, quantity, direction) and generates a script you can edit:
+
+```matlab
+jd_dep = linspace(juliandate(2026, 9, 1), juliandate(2027, 1, 31), 80);
+jd_arr = linspace(juliandate(2027, 4, 1), juliandate(2028, 2, 28), 80);
+p = porkchop('earth', 'mars', jd_dep, jd_arr);   % C3, vinf_dep, vinf_arr, tof grids + best_*
+contourf(jd_dep - jd_dep(1), jd_arr - jd_arr(1), p.C3, [8 10 12 15 20 30 60]);
+```
+
+Planet positions come from JPL's approximate Keplerian mean elements (valid
+1800–2050, Standish); `ephemeris('mars', jd)` exposes them directly, and
+`juliandate`, `jd2date` and `datestr` convert dates.
+
+### Transfer planner
+
+The **Transfer tool** button compares a Hohmann and a bi-elliptic transfer
+between two circular orbits around a chosen body (altitude or radius input),
+sweeps the intermediate apoapsis, folds an optional plane change into the
+slowest burn, and plots either Δv against apoapsis ratio or the orbit geometry.
+The underlying functions are `hohmann`, `bielliptic`, `planechange`,
+`visviva` and `vcirc`.
+
+### Launch window and Δv budget
+
+The **Budget tool** button searches departure dates for the cheapest transfer
+between two planets, prices the departure burn from a parking orbit and the
+capture burn (circular, elliptical or flyby) with patched conics, applies a
+burn margin, reports the launch window within a tolerance of the minimum and
+the propellant fraction at a given specific impulse. Underlying functions:
+`porkchop`, `escape_dv`, `capture_dv`, `prop_fraction`.
+
+### Atmospheric entry
+
+The **Entry tool** button integrates a planar entry trajectory (drag, lift with
+bank angle, gravity, exponential atmosphere) with `ode45` for Earth, Mars,
+Venus, Titan or Jupiter, and reports peak g-load, Sutton–Graves stagnation
+heating, integrated heat load, dynamic pressure and downrange. Presets cover
+Apollo, Soyuz, MSL, Huygens and Galileo. Underlying functions: `entry` and
+`atmosphere`.
+
+### Gravity assist
+
+The **Flyby tool** button models an unpowered hyperbolic flyby of any planet on
+a given date: the inbound v∞ (magnitude and direction relative to the planet's
+velocity) is turned by the angle set by the periapsis radius, on the trailing
+or leading side. It reports the turn angle, heliocentric speed change and the
+orbit before and after, and plots Δv against closest approach or the velocity
+triangle. Underlying functions: `turn_angle`, `flyby`, `ephemeris`,
+`cart2kepler`.
+
 Type `help` in the console for the full function list. The interpreter supports
 MATLAB's matrix literals (including whitespace-separated elements and `'`
 transpose), `end` and logical indexing, `:` ranges, element-wise and matrix
@@ -59,7 +112,7 @@ Node 22.22.2+ or 24.15.0+ is required.
 
 ```sh
 npm run check   # node --check for the impact app, tsc --noEmit for the rest
-npm test        # impact model tests (63) and astrolab tests (31)
+npm test        # impact model tests (63) and astrolab tests (38)
 npm run build
 ```
 

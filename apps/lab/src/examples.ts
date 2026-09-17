@@ -5,6 +5,134 @@ export interface Example {
 
 export const EXAMPLES: Example[] = [
   {
+    title: "Porkchop plot Earth → Mars (2026 window)",
+    code: `% Lambert porkchop: departure C3 over launch and arrival dates
+jd_dep = juliandate(2026, 9, 1) : 3 : juliandate(2027, 1, 31);
+jd_arr = juliandate(2027, 4, 1) : 4 : juliandate(2028, 2, 28);
+p = porkchop('earth', 'mars', jd_dep, jd_arr);
+
+fprintf('min C3 = %.1f km^2/s^2, depart %s, arrive %s, %d days\\n', ...
+  p.best_C3, datestr(p.best_jd_dep), datestr(p.best_jd_arr), round(p.best_tof));
+fprintf('arrival v-infinity there: %.2f km/s\\n', p.best_vinf_arr);
+
+% Days after the first departure date on the axes; contours in C3
+contourf(jd_dep - jd_dep(1), jd_arr - jd_arr(1), p.C3, [8 10 12 15 20 25 30 40 60 100]);
+hold on;
+plot(p.best_jd_dep - jd_dep(1), p.best_jd_arr - jd_arr(1), 'wo');
+xlabel(['days after ' datestr(jd_dep(1))]); ylabel(['days after ' datestr(jd_arr(1))]);
+title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
+
+% Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
+  },
+  {
+    title: "Gravity assist: Jupiter flyby pumps a Cassini-style orbit",
+    code: `% Unpowered Jupiter flyby: how much heliocentric energy does closest approach buy?
+mu = mu_jupiter; R = R_jupiter;
+[r_pl, v_pl] = ephemeris('jupiter', juliandate(2030, 1, 1));
+vhat = v_pl / norm(v_pl); hhat = cross(r_pl, v_pl) / norm(cross(r_pl, v_pl)); nhat = cross(hhat, vhat);
+vinf_in = 5.6e3 * (cos(deg2rad(120)) * vhat + sin(deg2rad(120)) * nhat);
+nrm = cross(vinf_in, v_pl);                 % trailing-side pass: spacecraft speeds up
+v_in = v_pl + vinf_in;
+
+alts = logspace(log10(0.1 * R), log10(60 * R), 150);
+dv = zeros(size(alts)); turn = zeros(size(alts)); Q = zeros(size(alts));
+for k = 1:numel(alts)
+  f = flyby(vinf_in, R + alts(k), mu, nrm);
+  v_out = v_pl + f.vinf_out;
+  dv(k) = (norm(v_out) - norm(v_in)) / 1e3;
+  turn(k) = rad2deg(f.delta);
+  el = cart2kepler(r_pl, v_out, mu_sun);
+  if el(2) < 1, Q(k) = el(1) * (1 + el(2)) / AU; else, Q(k) = NaN; end
+end
+semilogx(alts / R, dv, 'b-'); hold on; semilogx(alts / R, turn / 30, 'r--');
+legend('heliocentric dv (km/s)', 'turn angle / 30 (deg)');
+xlabel('periapsis altitude (Jupiter radii)'); ylabel('km/s'); title('Jupiter gravity assist, v-inf 5.6 km/s'); grid on;
+[dvmax, k] = max(dv);
+if isnan(Q(k)), tail = 'solar-system escape'; else, tail = sprintf('aphelion %.1f AU', Q(k)); end
+fprintf('max gain %.2f km/s at %.1f RJ: %s\\n', dvmax, alts(k) / R, tail);
+fprintf('Voyager-class check: 5 RJ pass turns %.0f deg\\n', rad2deg(turn_angle(5.6e3, 5 * R, mu)));
+% The Flyby tool (top bar) does this for any planet, date, approach angle and pass side.`,
+  },
+  {
+    title: "Entry corridor: g-load and skip-out vs flight-path angle",
+    code: `% Lunar-return capsule: how steep can you enter before the g-load is too high,
+% and how shallow before you skip back out? (Apollo-like capsule, 55 deg bank)
+% Full lift-up skips out until the g-load is already too high, which is why
+% Apollo modulated bank; a fixed 55 deg bank opens a usable corridor.
+opts = struct('m', 5500, 'A', 12, 'CD', 1.3, 'LD', 0.3, 'bank', deg2rad(55), 'rn', 4.7, 'v_stop', 150);
+gammas = -4.5 : -0.25 : -9;
+peak_g = zeros(size(gammas)); skipped = zeros(size(gammas)); qmax = zeros(size(gammas));
+for k = 1:numel(gammas)
+  e = entry('earth', 11000, deg2rad(gammas(k)), 122e3, opts);
+  peak_g(k) = e.peak_decel / g0;
+  qmax(k) = e.peak_qdot / 1e4;
+  skipped(k) = strcmp(e.outcome, 'skipped-out');
+end
+plot(gammas, peak_g, 'r-'); hold on;
+plot(gammas(skipped == 1), peak_g(skipped == 1), 'wo');
+plot(gammas, 12 * ones(size(gammas)), 'k--');
+legend('peak g', 'skips out', '12 g limit');
+xlabel('entry flight-path angle (deg)'); ylabel('peak deceleration (g)');
+title('lunar return corridor, L/D 0.3 at 55 deg bank'); grid on;
+inside = skipped == 0 & peak_g <= 12;
+if any(inside)
+  fprintf('corridor: %.2f to %.2f deg (%.2f deg wide)\\n', max(gammas(inside)), min(gammas(inside)), max(gammas(inside)) - min(gammas(inside)));
+  fprintf('peak heating in corridor: %.0f W/cm^2\\n', max(qmax(inside)));
+else
+  disp('no entry angle satisfies both limits; increase bank or the g limit');
+end
+% The Entry tool (top bar) runs a single trajectory with presets for Apollo, Soyuz, MSL, Huygens and Galileo.`,
+  },
+  {
+    title: "Mars mission delta-v budget and launch window",
+    code: `% Price a Mars orbiter: parking orbit burn + capture burn over the 2026 window
+jd_dep = linspace(juliandate(2026, 8, 1), juliandate(2027, 2, 1), 60);
+jd_arr = linspace(juliandate(2027, 3, 1), juliandate(2028, 3, 1), 60);
+p = porkchop('earth', 'mars', jd_dep, jd_arr);
+dv_dep = escape_dv(p.vinf_dep * 1e3, R_earth + 300e3, mu_earth);
+dv_cap = capture_dv(p.vinf_arr * 1e3, R_mars + 400e3, mu_mars, 0);   % circular capture
+dv_tot = dv_dep + dv_cap;
+[dv_min, k] = min(dv_tot(:)); [i, j] = ind2sub(size(dv_tot), k);
+fprintf('cheapest: %.0f m/s (dep %.0f + cap %.0f), leave %s, arrive %s\\n', ...
+  dv_min, dv_dep(i,j), dv_cap(i,j), datestr(jd_dep(j)), datestr(jd_arr(i)));
+fprintf('propellant fraction at Isp 320 s: %.0f%%\\n', 100 * prop_fraction(dv_min, 320));
+
+best = min(dv_tot);                        % best arrival for each departure date
+open = jd_dep(best <= 1.1 * dv_min);
+fprintf('10%% window: %s to %s (%d days)\\n', datestr(open(1)), datestr(open(end)), round(open(end) - open(1)));
+plot(jd_dep - jd_dep(1), best / 1e3, 'b-'); hold on;
+plot(jd_dep - jd_dep(1), 1.1 * dv_min / 1e3 * ones(size(jd_dep)), 'r--');
+xlabel(['days after ' datestr(jd_dep(1))]); ylabel('total dv (km/s)');
+title('Earth-Mars orbiter: best total dv per departure date'); grid on;
+% The Budget tool (top bar) builds this with margins, flyby/elliptical capture and any planet pair.`,
+  },
+  {
+    title: "Hohmann vs bi-elliptic with plane change",
+    code: `% When does a bi-elliptic transfer beat Hohmann? Sweep the radius ratio.
+mu = mu_earth; r1 = R_earth + 300e3;
+ratios = linspace(2, 30, 120);
+dv_h = zeros(size(ratios)); dv_b = zeros(size(ratios));
+for k = 1:numel(ratios)
+  r2 = ratios(k) * r1;
+  h = hohmann(r1, r2, mu);          dv_h(k) = h.dv_total;
+  b = bielliptic(r1, r2, 40 * r2, mu); dv_b(k) = b.dv_total;
+end
+plot(ratios, dv_h / 1e3, 'r-'); hold on; plot(ratios, dv_b / 1e3, 'b-');
+legend('Hohmann', 'bi-elliptic, rB = 40 r2');
+xlabel('r2 / r1'); ylabel('total dv (km/s)'); title('circular-to-circular transfers'); grid on;
+
+% Crossover near 11.94 for an infinitely high intermediate apoapsis
+cross = fzero(@(x) hohmann(r1, x*r1, mu).dv_total - bielliptic(r1, x*r1, 1e4*r1, mu).dv_total, [10 14]);
+fprintf('Hohmann and bi-elliptic cost the same at r2/r1 = %.2f\\n', cross);
+
+% GTO from Cape Canaveral: fold the 28.5 deg plane change into the apogee burn
+h = hohmann(r1, 42164e3, mu);
+va = visviva(42164e3, h.a_transfer, mu); vc = vcirc(42164e3, mu);
+dv2 = sqrt(va^2 + vc^2 - 2*va*vc*cos(deg2rad(28.5)));
+fprintf('GEO insertion with plane change: %.0f m/s (vs %.0f coplanar)\\n', dv2, h.dv2);
+% The Transfer tool (top bar) generates a full comparison for any pair of orbits.`,
+  },
+  {
     title: "Hohmann transfer LEO → GEO",
     code: `% Hohmann transfer from a 300 km parking orbit to geostationary altitude
 r1 = R_earth + 300e3;

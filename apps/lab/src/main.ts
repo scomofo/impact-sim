@@ -1,6 +1,11 @@
 import { createConsole, formatValue, RuntimeError, type PlotState, type Value } from "@orbital-suite/astrolab";
 import { isMatrix, isScalar, format, numel } from "@orbital-suite/astrolab";
 import { EXAMPLES } from "./examples";
+import { porkchopScript, PLANETS } from "./porkchop";
+import { transferScript, CENTRAL_BODIES } from "./transfer";
+import { budgetScript } from "./budget";
+import { entryScript, ENTRY_BODIES, ENTRY_PRESETS, type EntrySpec } from "./entrytool";
+import { flybyScript, type FlybySpec } from "./flybytool";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -31,7 +36,7 @@ const interp = createConsole({
   print: (s) => append(s),
   plot: (state) => {
     lastPlot = state;
-    figureEmpty.classList.toggle("hidden", state.series.length > 0);
+    figureEmpty.classList.toggle("hidden", state.series.length > 0 || state.contour !== null);
     drawFigure(canvas, state);
   },
   clear: () => { output.textContent = ""; },
@@ -109,6 +114,219 @@ for (const [i, ex] of EXAMPLES.entries()) {
 examples.addEventListener("change", () => {
   const ex = EXAMPLES[Number(examples.value)];
   if (ex) editor.value = ex.code;
+});
+
+// ---- Porkchop tool -------------------------------------------------------------
+const dialog = $<HTMLDialogElement>("porkchop");
+const form = $<HTMLFormElement>("porkchop-form");
+for (const name of ["from", "to"] as const) {
+  const sel = form.elements.namedItem(name) as HTMLSelectElement;
+  for (const p of PLANETS) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p[0]!.toUpperCase() + p.slice(1);
+    sel.appendChild(opt);
+  }
+}
+(form.elements.namedItem("from") as HTMLSelectElement).value = "earth";
+(form.elements.namedItem("to") as HTMLSelectElement).value = "mars";
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const today = new Date();
+const inDays = (n: number) => iso(new Date(today.getTime() + n * 86400e3));
+(form.elements.namedItem("dep0") as HTMLInputElement).value = inDays(0);
+(form.elements.namedItem("dep1") as HTMLInputElement).value = inDays(540);
+(form.elements.namedItem("arr0") as HTMLInputElement).value = inDays(150);
+(form.elements.namedItem("arr1") as HTMLInputElement).value = inDays(900);
+
+function buildScript(): string | null {
+  const data = new FormData(form);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const from = get("from"), to = get("to");
+  if (from === to) { append("Porkchop: departure and arrival bodies must differ.\n", "err"); return null; }
+  const dates = ["dep0", "dep1", "arr0", "arr1"].map((k) => get(k));
+  if (dates.some((d) => !/^\d{4}-\d{2}-\d{2}$/.test(d))) { append("Porkchop: enter all four dates.\n", "err"); return null; }
+  if (dates[0]! >= dates[1]! || dates[2]! >= dates[3]!) { append("Porkchop: each range must end after it starts.\n", "err"); return null; }
+  const n = Math.min(300, Math.max(10, Number(get("n")) || 80));
+  return porkchopScript({ from, to, dep: [dates[0]!, dates[1]!], arr: [dates[2]!, dates[3]!], n, what: get("what") as "C3" | "vinf_arr" | "total", retro: get("dir") === "retro" });
+}
+$("porkchop-open").addEventListener("click", () => dialog.showModal());
+$("porkchop-cancel").addEventListener("click", () => dialog.close());
+$("porkchop-insert").addEventListener("click", () => { const s = buildScript(); if (s) { editor.value = s; dialog.close(); } });
+form.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildScript();
+  if (!s) return;
+  editor.value = s;
+  dialog.close();
+  run(s, "porkchop tool");
+});
+
+// ---- Transfer planner tool ---------------------------------------------------
+const tDialog = $<HTMLDialogElement>("transfer");
+const tForm = $<HTMLFormElement>("transfer-form");
+{
+  const sel = tForm.elements.namedItem("body") as HTMLSelectElement;
+  for (const b of CENTRAL_BODIES) {
+    const opt = document.createElement("option");
+    opt.value = b;
+    opt.textContent = b[0]!.toUpperCase() + b.slice(1);
+    sel.appendChild(opt);
+  }
+  sel.value = "earth";
+}
+function buildTransferScript(): string | null {
+  const data = new FormData(tForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const r1 = Number(get("r1")), r2 = Number(get("r2"));
+  const mode = get("mode") as "altitude" | "radius";
+  if (!(r1 >= 0 && r2 >= 0) || (mode === "radius" && (r1 <= 0 || r2 <= 0))) { append("Transfer: orbit sizes must be positive numbers.\n", "err"); return null; }
+  if (r1 === r2) { append("Transfer: the two orbits must differ.\n", "err"); return null; }
+  const ratio = Math.max(1.01, Number(get("ratio")) || 3);
+  const di = Math.min(180, Math.max(0, Number(get("di")) || 0));
+  return transferScript({ body: get("body"), mode, r1, r2, ratio, planeChangeDeg: di, plot: get("plot") as "dv" | "orbits" });
+}
+$("transfer-open").addEventListener("click", () => tDialog.showModal());
+$("transfer-cancel").addEventListener("click", () => tDialog.close());
+$("transfer-insert").addEventListener("click", () => { const s = buildTransferScript(); if (s) { editor.value = s; tDialog.close(); } });
+tForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildTransferScript();
+  if (!s) return;
+  editor.value = s;
+  tDialog.close();
+  run(s, "transfer tool");
+});
+
+// ---- Launch window / dv budget tool -----------------------------------------
+const bDialog = $<HTMLDialogElement>("budget");
+const bForm = $<HTMLFormElement>("budget-form");
+for (const name of ["from", "to"] as const) {
+  const sel = bForm.elements.namedItem(name) as HTMLSelectElement;
+  for (const p of PLANETS) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p[0]!.toUpperCase() + p.slice(1);
+    sel.appendChild(opt);
+  }
+}
+(bForm.elements.namedItem("from") as HTMLSelectElement).value = "earth";
+(bForm.elements.namedItem("to") as HTMLSelectElement).value = "mars";
+(bForm.elements.namedItem("dep0") as HTMLInputElement).value = inDays(0);
+(bForm.elements.namedItem("dep1") as HTMLInputElement).value = inDays(800);
+function buildBudgetScript(): string | null {
+  const data = new FormData(bForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const from = get("from"), to = get("to");
+  if (from === to) { append("Budget: departure and arrival bodies must differ.\n", "err"); return null; }
+  const dep0 = get("dep0"), dep1 = get("dep1");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dep0) || !/^\d{4}-\d{2}-\d{2}$/.test(dep1) || dep0 >= dep1) { append("Budget: enter a departure range that ends after it starts.\n", "err"); return null; }
+  return budgetScript({
+    from, to,
+    parkAlt: Math.max(0, Number(get("park")) || 0),
+    captureAlt: Math.max(0, Number(get("cap")) || 0),
+    captureEcc: Number(get("ecc")),
+    dep: [dep0, dep1],
+    maxTof: Math.max(30, Number(get("tof")) || 400),
+    n: Math.min(300, Math.max(10, Number(get("n")) || 70)),
+    tolerance: Math.max(0, Number(get("tol")) || 0) / 100,
+    margin: Math.max(0, Number(get("margin")) || 0) / 100,
+    isp: Math.max(50, Number(get("isp")) || 320),
+  });
+}
+$("budget-open").addEventListener("click", () => bDialog.showModal());
+$("budget-cancel").addEventListener("click", () => bDialog.close());
+$("budget-insert").addEventListener("click", () => { const s = buildBudgetScript(); if (s) { editor.value = s; bDialog.close(); } });
+bForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildBudgetScript();
+  if (!s) return;
+  editor.value = s;
+  bDialog.close();
+  run(s, "budget tool");
+});
+
+// ---- Atmospheric entry tool ---------------------------------------------------
+const eDialog = $<HTMLDialogElement>("entry");
+const eForm = $<HTMLFormElement>("entry-form");
+{
+  const body = eForm.elements.namedItem("body") as HTMLSelectElement;
+  for (const b of ENTRY_BODIES) {
+    const opt = document.createElement("option");
+    opt.value = b;
+    opt.textContent = b[0]!.toUpperCase() + b.slice(1);
+    body.appendChild(opt);
+  }
+  body.value = "earth";
+  const preset = eForm.elements.namedItem("preset") as HTMLSelectElement;
+  for (const [key, p] of Object.entries(ENTRY_PRESETS)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = p.label;
+    preset.appendChild(opt);
+  }
+  const fieldOf: Record<string, keyof EntrySpec> = { body: "body", v0: "v0", gamma: "gammaDeg", h0: "h0", mass: "mass", area: "area", cd: "cd", ld: "ld", bank: "bankDeg", rn: "noseRadius", hstop: "hStop", vstop: "vStop" };
+  preset.addEventListener("change", () => {
+    const p = ENTRY_PRESETS[preset.value];
+    if (!p) return;
+    for (const [input, key] of Object.entries(fieldOf)) {
+      const el = eForm.elements.namedItem(input) as HTMLInputElement | HTMLSelectElement;
+      const v = p[key];
+      if (v !== undefined) el.value = String(v);
+    }
+  });
+}
+function buildEntryScript(): string | null {
+  const data = new FormData(eForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const n = (k: string, d: number) => { const v = Number(get(k)); return Number.isFinite(v) && get(k) !== "" ? v : d; };
+  const v0 = n("v0", 0), mass = n("mass", 0), area = n("area", 0), cd = n("cd", 0);
+  if (v0 <= 0 || mass <= 0 || area <= 0 || cd <= 0) { append("Entry: speed, mass, area and CD must be positive.\n", "err"); return null; }
+  return entryScript({ body: get("body"), v0, gammaDeg: n("gamma", -1.5), h0: n("h0", 120), mass, area, cd, ld: n("ld", 0), bankDeg: n("bank", 0), noseRadius: Math.max(0.01, n("rn", 1)), hStop: n("hstop", 0), vStop: Math.max(0, n("vstop", 0)), plot: get("plot") as EntrySpec["plot"] });
+}
+$("entry-open").addEventListener("click", () => eDialog.showModal());
+$("entry-cancel").addEventListener("click", () => eDialog.close());
+$("entry-insert").addEventListener("click", () => { const s = buildEntryScript(); if (s) { editor.value = s; eDialog.close(); } });
+eForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildEntryScript();
+  if (!s) return;
+  editor.value = s;
+  eDialog.close();
+  run(s, "entry tool");
+});
+
+// ---- Gravity assist tool --------------------------------------------------------
+const fDialog = $<HTMLDialogElement>("flyby");
+const fForm = $<HTMLFormElement>("flyby-form");
+{
+  const sel = fForm.elements.namedItem("body") as HTMLSelectElement;
+  for (const p of PLANETS) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p[0]!.toUpperCase() + p.slice(1);
+    sel.appendChild(opt);
+  }
+  sel.value = "venus";
+  (fForm.elements.namedItem("date") as HTMLInputElement).value = inDays(365);
+}
+function buildFlybyScript(): string | null {
+  const data = new FormData(fForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const vinf = Number(get("vinf"));
+  if (!(vinf > 0)) { append("Flyby: v-infinity must be positive.\n", "err"); return null; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(get("date"))) { append("Flyby: enter a flyby date.\n", "err"); return null; }
+  return flybyScript({ body: get("body"), date: get("date"), vinf, angleDeg: Number(get("angle")) || 0, altitude: Math.max(0, Number(get("alt")) || 0), side: get("side") as FlybySpec["side"], plot: get("plot") as FlybySpec["plot"] });
+}
+$("flyby-open").addEventListener("click", () => fDialog.showModal());
+$("flyby-cancel").addEventListener("click", () => fDialog.close());
+$("flyby-insert").addEventListener("click", () => { const s = buildFlybyScript(); if (s) { editor.value = s; fDialog.close(); } });
+fForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildFlybyScript();
+  if (!s) return;
+  editor.value = s;
+  fDialog.close();
+  run(s, "flyby tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);

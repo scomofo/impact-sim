@@ -19,6 +19,7 @@ export const MU = {
   saturn: 3.7931187e16,
   uranus: 5.793939e15,
   neptune: 6.836529e15,
+  titan: 8.978e12,
 } as const;
 
 /** Mean equatorial radii in metres. */
@@ -33,6 +34,7 @@ export const RADIUS = {
   saturn: 6.0268e7,
   uranus: 2.5559e7,
   neptune: 2.4764e7,
+  titan: 2.5747e6,
 } as const;
 
 export const AU = 1.495978707e11;
@@ -208,6 +210,61 @@ export function propagateKepler(sv: StateVector, mu: number, dt: number): StateV
   return kepler2cart({ ...el, nu }, mu);
 }
 
+/** Hyperbolic turn angle for excess speed vinf and periapsis radius rp. */
+export function turnAngle(vinf: number, rp: number, mu: number): number {
+  const e = 1 + (rp * vinf * vinf) / mu;
+  return 2 * Math.asin(1 / e);
+}
+
+export interface FlybyResult {
+  /** Turn angle, rad. */
+  delta: number;
+  /** Hyperbola eccentricity and periapsis speed. */
+  eHyp: number;
+  vPeriapsis: number;
+  /** Outbound planet-relative excess velocity (same magnitude as inbound). */
+  vinfOut: Vec3;
+  /** Change in the planet-relative velocity vector = heliocentric Δv imparted. */
+  deltaV: Vec3;
+}
+
+/**
+ * Unpowered gravity assist: rotate the inbound excess velocity by the turn
+ * angle about `axis` (the flyby-plane normal). Rotating about
+ * (vinf_in × planet velocity) turns the excess velocity toward the planet's
+ * motion: the trailing-side pass that speeds the spacecraft up. Pass the
+ * negated axis for a leading-side pass that slows it down.
+ */
+export function gravityAssist(vinfIn: Vec3, rp: number, mu: number, axis: Vec3): FlybyResult {
+  const vinf = v3.norm(vinfIn);
+  const delta = turnAngle(vinf, rp, mu);
+  const eHyp = 1 + (rp * vinf * vinf) / mu;
+  const n = v3.scale(axis, 1 / v3.norm(axis));
+  // Rodrigues rotation of vinfIn about n by delta.
+  const c = Math.cos(delta), s = Math.sin(delta);
+  const cross = v3.cross(n, vinfIn);
+  const dot = v3.dot(n, vinfIn);
+  const vinfOut: Vec3 = [
+    vinfIn[0] * c + cross[0] * s + n[0] * dot * (1 - c),
+    vinfIn[1] * c + cross[1] * s + n[1] * dot * (1 - c),
+    vinfIn[2] * c + cross[2] * s + n[2] * dot * (1 - c),
+  ];
+  return { delta, eHyp, vPeriapsis: Math.sqrt(vinf * vinf + (2 * mu) / rp), vinfOut, deltaV: v3.sub(vinfOut, vinfIn) };
+}
+
+/** Δv to leave a circular parking orbit of radius r onto a hyperbola with excess speed vinf (patched conics). */
+export const escapeDeltaV = (vinf: number, r: number, mu: number): number => Math.sqrt(vinf * vinf + (2 * mu) / r) - Math.sqrt(mu / r);
+
+/** Δv to capture from excess speed vinf into an orbit with periapsis rp and eccentricity e (0 = circular). */
+export function captureDeltaV(vinf: number, rp: number, mu: number, e = 0): number {
+  const vHyp = Math.sqrt(vinf * vinf + (2 * mu) / rp);
+  const vOrbit = Math.sqrt((mu * (1 + e)) / rp);
+  return vHyp - vOrbit;
+}
+
+/** Tsiolkovsky: propellant mass fraction for Δv at specific impulse isp (s). */
+export const propellantFraction = (dv: number, isp: number): number => 1 - Math.exp(-dv / (isp * 9.80665));
+
 export interface HohmannResult {
   /** Burn to enter the transfer ellipse. */
   dv1: number;
@@ -324,4 +381,123 @@ export function lagrangePoints(mu: number): { L1: number; L2: number; L3: number
   const L3 = fzero(dUdx, [-2, -mu - eps]);
   const h = Math.sqrt(3) / 2;
   return { L1, L2, L3, L4: [0.5 - mu, h], L5: [0.5 - mu, -h] };
+}
+
+// ---- planetary ephemerides ---------------------------------------------------
+
+/** Julian date from a calendar date (UTC, proleptic Gregorian), Meeus ch. 7. */
+export function juliandate(year: number, month: number, day: number, hour = 0, minute = 0, second = 0): number {
+  let y = year, m = month;
+  if (m <= 2) { y -= 1; m += 12; }
+  const A = Math.floor(y / 100);
+  const B = 2 - A + Math.floor(A / 4);
+  const d = day + (hour + minute / 60 + second / 3600) / 24;
+  return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5;
+}
+
+/** Calendar date from a Julian date (Meeus ch. 7). */
+export function jd2date(jd: number): { year: number; month: number; day: number; hour: number; minute: number; second: number } {
+  const z = Math.floor(jd + 0.5);
+  const f = jd + 0.5 - z;
+  const alpha = Math.floor((z - 1867216.25) / 36524.25);
+  const A = z < 2299161 ? z : z + 1 + alpha - Math.floor(alpha / 4);
+  const B = A + 1524;
+  const C = Math.floor((B - 122.1) / 365.25);
+  const D = Math.floor(365.25 * C);
+  const E = Math.floor((B - D) / 30.6001);
+  const dayF = B - D - Math.floor(30.6001 * E) + f;
+  const day = Math.floor(dayF);
+  const month = E < 14 ? E - 1 : E - 13;
+  const year = month > 2 ? C - 4716 : C - 4715;
+  const hours = (dayF - day) * 24;
+  const hour = Math.floor(hours);
+  const minutes = (hours - hour) * 60;
+  const minute = Math.floor(minutes);
+  return { year, month, day, hour, minute, second: (minutes - minute) * 60 };
+}
+
+export const J2000 = 2451545.0;
+export const PLANET_IDS = ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"] as const;
+export type PlanetId = (typeof PLANET_IDS)[number];
+
+/**
+ * Keplerian mean elements and centennial rates valid 1800–2050 AD
+ * (Standish, "Keplerian Elements for Approximate Positions of the Major
+ * Planets", JPL, Table 1). Elements: a [AU], e, I [deg], L [deg],
+ * long.peri [deg], long.node [deg]; rates per Julian century. The Earth
+ * entry is the Earth–Moon barycentre.
+ */
+const STANDISH: Record<PlanetId, [number[], number[]]> = {
+  mercury: [[0.38709927, 0.20563593, 7.00497902, 252.25032350, 77.45779628, 48.33076593], [0.00000037, 0.00001906, -0.00594749, 149472.67411175, 0.16047689, -0.12534081]],
+  venus: [[0.72333566, 0.00677672, 3.39467605, 181.97909950, 131.60246718, 76.67984255], [0.00000390, -0.00004107, -0.00078890, 58517.81538729, 0.00268329, -0.27769418]],
+  earth: [[1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0.0], [0.00000562, -0.00004392, -0.01294668, 35999.37244981, 0.32327364, 0.0]],
+  mars: [[1.52371034, 0.09339410, 1.84969142, -4.55343205, -23.94362959, 49.55953891], [0.00001847, 0.00007882, -0.00813131, 19140.30268499, 0.44441088, -0.29257343]],
+  jupiter: [[5.20288700, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909], [-0.00011607, -0.00013253, -0.00183714, 3034.74612775, 0.21252668, 0.20469106]],
+  saturn: [[9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448], [-0.00125060, -0.00050991, 0.00193609, 1222.49362201, -0.41897216, -0.28867794]],
+  uranus: [[19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.95427630, 74.01692503], [-0.00196176, -0.00004397, -0.00242939, 428.48202785, 0.40805281, 0.04240589]],
+  neptune: [[30.06992276, 0.00859048, 1.77004347, -55.12002969, 44.96476227, 131.78422574], [0.00026291, 0.00005105, 0.00035372, 218.45945325, -0.32241464, -0.00508664]],
+};
+
+/** Heliocentric ecliptic-J2000 state of a planet at Julian date `jd` (m, m/s). */
+export function planetState(body: PlanetId, jd: number): StateVector {
+  const entry = STANDISH[body];
+  if (!entry) throw new Error(`planetState: unknown body '${body}'`);
+  const T = (jd - J2000) / 36525;
+  const [e0, r0] = entry;
+  const el = e0.map((v, i) => v + r0[i]! * T) as [number, number, number, number, number, number];
+  const [aAU, e, Ideg, Ldeg, wbarDeg, OmegaDeg] = el;
+  const d2r = Math.PI / 180;
+  const a = aAU * AU;
+  const argp = (wbarDeg - OmegaDeg) * d2r;
+  const M = ((((Ldeg - wbarDeg) % 360) + 360) % 360) * d2r;
+  const nu = meanToTrue(M, e);
+  return kepler2cart({ a, e, i: Ideg * d2r, raan: OmegaDeg * d2r, argp, nu }, MU.sun);
+}
+
+export interface PorkchopResult {
+  /** Departure Julian dates (columns of the grids). */
+  jdDep: number[];
+  /** Arrival Julian dates (rows of the grids). */
+  jdArr: number[];
+  /** Departure characteristic energy C3 = v∞², km²/s². NaN where no solution. */
+  c3: number[][];
+  /** Arrival hyperbolic excess speed, km/s. */
+  vinfArr: number[][];
+  /** Departure hyperbolic excess speed, km/s. */
+  vinfDep: number[][];
+  /** Time of flight, days. */
+  tof: number[][];
+  /** Grid minimum of C3 and its location. */
+  best: { c3: number; vinfArr: number; jdDep: number; jdArr: number; tof: number };
+}
+
+/**
+ * Porkchop grid: Lambert transfers between two planets over ranges of
+ * departure and arrival dates. Rows index arrival dates, columns departure
+ * dates, matching how `contour(jdDep, jdArr, C3)` expects its arguments.
+ */
+export function porkchop(from: PlanetId, to: PlanetId, jdDep: number[], jdArr: number[], prograde = true): PorkchopResult {
+  const dep = jdDep.map((jd) => planetState(from, jd));
+  const arr = jdArr.map((jd) => planetState(to, jd));
+  const c3: number[][] = [], vinfArr: number[][] = [], vinfDep: number[][] = [], tof: number[][] = [];
+  const best = { c3: Infinity, vinfArr: NaN, jdDep: NaN, jdArr: NaN, tof: NaN };
+  for (let i = 0; i < jdArr.length; i++) {
+    const rowC3: number[] = [], rowVa: number[] = [], rowVd: number[] = [], rowT: number[] = [];
+    for (let j = 0; j < jdDep.length; j++) {
+      const dt = (jdArr[i]! - jdDep[j]!) * DAY;
+      rowT.push(dt / DAY);
+      if (dt <= DAY) { rowC3.push(NaN); rowVa.push(NaN); rowVd.push(NaN); continue; }
+      try {
+        const sol = lambert(dep[j]!.r, arr[i]!.r, dt, MU.sun, prograde);
+        const vd = v3.norm(v3.sub(sol.v1, dep[j]!.v)) / 1e3;
+        const va = v3.norm(v3.sub(sol.v2, arr[i]!.v)) / 1e3;
+        rowC3.push(vd * vd); rowVa.push(va); rowVd.push(vd);
+        if (vd * vd < best.c3) Object.assign(best, { c3: vd * vd, vinfArr: va, jdDep: jdDep[j]!, jdArr: jdArr[i]!, tof: dt / DAY });
+      } catch {
+        rowC3.push(NaN); rowVa.push(NaN); rowVd.push(NaN);
+      }
+    }
+    c3.push(rowC3); vinfArr.push(rowVa); vinfDep.push(rowVd); tof.push(rowT);
+  }
+  return { jdDep, jdArr, c3, vinfArr, vinfDep, tof, best };
 }

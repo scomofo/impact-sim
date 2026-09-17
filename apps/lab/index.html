@@ -24,6 +24,11 @@
             Examples
             <select id="examples"></select>
           </label>
+          <button id="porkchop-open" class="btn">Porkchop tool</button>
+          <button id="transfer-open" class="btn">Transfer tool</button>
+          <button id="budget-open" class="btn">Budget tool</button>
+          <button id="entry-open" class="btn">Entry tool</button>
+          <button id="flyby-open" class="btn">Flyby tool</button>
           <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
           <button id="clear" class="btn">Clear</button>
           <a class="btn link" href="../index.html">Suite</a>
@@ -53,6 +58,134 @@
         </section>
       </main>
     </div>
+    <dialog id="porkchop" class="tool">
+      <form id="porkchop-form" method="dialog">
+        <div class="tool-title">Lambert porkchop plot</div>
+        <p class="tool-help">Grid of Lambert transfers between two planets. Colour is departure C3 (km²/s²); the white circle marks the grid minimum. Uses JPL approximate mean elements (1800–2050).</p>
+        <div class="tool-grid">
+          <label>Depart from <select name="from"></select></label>
+          <label>Arrive at <select name="to"></select></label>
+          <label>Departure start <input name="dep0" type="date" required /></label>
+          <label>Departure end <input name="dep1" type="date" required /></label>
+          <label>Arrival start <input name="arr0" type="date" required /></label>
+          <label>Arrival end <input name="arr1" type="date" required /></label>
+          <label>Grid points per axis <input name="n" type="number" min="10" max="300" value="80" /></label>
+          <label>Quantity <select name="what">
+            <option value="C3">Departure C3</option>
+            <option value="vinf_arr">Arrival v∞ (km/s)</option>
+            <option value="total">C3 + arrival v∞² (km²/s²)</option>
+          </select></label>
+          <label>Direction <select name="dir"><option value="pro">Prograde</option><option value="retro">Retrograde</option></select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="porkchop-cancel">Cancel</button>
+          <button type="button" class="btn" id="porkchop-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="transfer" class="tool">
+      <form id="transfer-form" method="dialog">
+        <div class="tool-title">Hohmann / bi-elliptic transfer planner</div>
+        <p class="tool-help">Compares a Hohmann transfer with a bi-elliptic transfer between two circular orbits, sweeps the intermediate apoapsis, and optionally folds a plane change into the slowest burn.</p>
+        <div class="tool-grid">
+          <label>Central body <select name="body"></select></label>
+          <label>Orbit sizes given as <select name="mode"><option value="altitude">Altitude above surface (km)</option><option value="radius">Radius from centre (km)</option></select></label>
+          <label>Initial orbit (km) <input name="r1" type="number" step="any" value="300" required /></label>
+          <label>Final orbit (km) <input name="r2" type="number" step="any" value="35786" required /></label>
+          <label>Bi-elliptic apoapsis (× larger radius) <input name="ratio" type="number" step="any" min="1.01" value="3" /></label>
+          <label>Plane change (deg) <input name="di" type="number" step="any" min="0" max="180" value="0" /></label>
+          <label>Figure <select name="plot"><option value="dv">Δv versus intermediate apoapsis</option><option value="orbits">Orbit geometry</option></select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="transfer-cancel">Cancel</button>
+          <button type="button" class="btn" id="transfer-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="budget" class="tool">
+      <form id="budget-form" method="dialog">
+        <div class="tool-title">Launch window &amp; Δv budget</div>
+        <p class="tool-help">Searches departure dates for the cheapest interplanetary transfer, prices the departure and capture burns with patched conics, adds a margin, and reports the launch window within a tolerance of the minimum plus the propellant fraction.</p>
+        <div class="tool-grid">
+          <label>Depart from <select name="from"></select></label>
+          <label>Arrive at <select name="to"></select></label>
+          <label>Parking orbit altitude (km) <input name="park" type="number" step="any" value="300" /></label>
+          <label>Capture periapsis altitude (km) <input name="cap" type="number" step="any" value="400" /></label>
+          <label>Capture orbit <select name="ecc">
+            <option value="0">Circular</option>
+            <option value="0.5">Elliptical e = 0.5</option>
+            <option value="0.9">Highly elliptical e = 0.9</option>
+            <option value="-1">Flyby (no capture burn)</option>
+          </select></label>
+          <label>Max flight time (days) <input name="tof" type="number" min="30" value="400" /></label>
+          <label>Departure search start <input name="dep0" type="date" required /></label>
+          <label>Departure search end <input name="dep1" type="date" required /></label>
+          <label>Window tolerance (% above minimum) <input name="tol" type="number" step="any" min="0" value="10" /></label>
+          <label>Burn margin (%) <input name="margin" type="number" step="any" min="0" value="5" /></label>
+          <label>Specific impulse (s) <input name="isp" type="number" min="50" value="320" /></label>
+          <label>Grid points per axis <input name="n" type="number" min="10" max="300" value="70" /></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="budget-cancel">Cancel</button>
+          <button type="button" class="btn" id="budget-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="entry" class="tool">
+      <form id="entry-form" method="dialog">
+        <div class="tool-title">Atmospheric entry</div>
+        <p class="tool-help">Integrates a planar entry trajectory (drag, lift with bank, gravity, exponential atmosphere) with ode45 and reports peak g-load, stagnation heating, heat load, dynamic pressure and downrange. Outcomes: landed, slowed to the stop speed, or skipped out.</p>
+        <div class="tool-grid">
+          <label>Preset <select name="preset"><option value="">Custom</option></select></label>
+          <label>Body <select name="body"></select></label>
+          <label>Entry speed (m/s) <input name="v0" type="number" step="any" value="7600" required /></label>
+          <label>Flight-path angle (deg, negative = down) <input name="gamma" type="number" step="any" value="-1.5" required /></label>
+          <label>Entry altitude (km) <input name="h0" type="number" step="any" value="120" /></label>
+          <label>Mass (kg) <input name="mass" type="number" step="any" value="2900" /></label>
+          <label>Reference area (m²) <input name="area" type="number" step="any" value="3.8" /></label>
+          <label>Drag coefficient <input name="cd" type="number" step="any" value="1.3" /></label>
+          <label>Lift-to-drag ratio <input name="ld" type="number" step="any" value="0" /></label>
+          <label>Bank angle (deg) <input name="bank" type="number" step="any" value="0" /></label>
+          <label>Nose radius (m) <input name="rn" type="number" step="any" value="2.2" /></label>
+          <label>Stop altitude (km) <input name="hstop" type="number" step="any" value="0" /></label>
+          <label>Stop speed (m/s) <input name="vstop" type="number" step="any" value="200" /></label>
+          <label>Figure <select name="plot">
+            <option value="hv">Altitude vs speed</option>
+            <option value="gt">Deceleration vs time</option>
+            <option value="qt">Heating vs time</option>
+            <option value="hr">Altitude vs downrange</option>
+          </select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="entry-cancel">Cancel</button>
+          <button type="button" class="btn" id="entry-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="flyby" class="tool">
+      <form id="flyby-form" method="dialog">
+        <div class="tool-title">Gravity assist / flyby</div>
+        <p class="tool-help">Unpowered hyperbolic flyby: the inbound excess velocity is rotated by the turn angle set by the periapsis radius. Reports the turn, the heliocentric speed change and the orbit before and after, and sweeps closest approach.</p>
+        <div class="tool-grid">
+          <label>Flyby planet <select name="body"></select></label>
+          <label>Flyby date <input name="date" type="date" required /></label>
+          <label>Inbound v∞ (km/s) <input name="vinf" type="number" step="any" value="5.6" required /></label>
+          <label>v∞ direction from planet velocity (deg) <input name="angle" type="number" step="any" value="120" /></label>
+          <label>Periapsis altitude (km) <input name="alt" type="number" step="any" value="300" /></label>
+          <label>Pass side <select name="side"><option value="trailing">Trailing (speeds up)</option><option value="leading">Leading (slows down)</option></select></label>
+          <label>Figure <select name="plot"><option value="sweep">Δv vs closest approach</option><option value="vectors">Velocity triangle</option></select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="flyby-cancel">Cancel</button>
+          <button type="button" class="btn" id="flyby-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
