@@ -7,7 +7,7 @@ numerical toolbox.
 | App | Path | Stack | What it does |
 | --- | --- | --- | --- |
 | Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
-| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool, a Hohmann/bi-elliptic transfer planner, a launch-window/Δv-budget tool and an atmospheric-entry tool. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool, a Hohmann/bi-elliptic transfer planner, a launch-window/Δv-budget tool, an atmospheric-entry tool and a gravity-assist tool. |
 | Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
 | Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
 | Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
@@ -88,6 +88,16 @@ heating, integrated heat load, dynamic pressure and downrange. Presets cover
 Apollo, Soyuz, MSL, Huygens and Galileo. Underlying functions: `entry` and
 `atmosphere`.
 
+### Gravity assist
+
+The **Flyby tool** button models an unpowered hyperbolic flyby of any planet on
+a given date: the inbound v∞ (magnitude and direction relative to the planet's
+velocity) is turned by the angle set by the periapsis radius, on the trailing
+or leading side. It reports the turn angle, heliocentric speed change and the
+orbit before and after, and plots Δv against closest approach or the velocity
+triangle. Underlying functions: `turn_angle`, `flyby`, `ephemeris`,
+`cart2kepler`.
+
 Type `help` in the console for the full function list. The interpreter supports
 MATLAB's matrix literals (including whitespace-separated elements and `'`
 transpose), `end` and logical indexing, `:` ranges, element-wise and matrix
@@ -102,7 +112,7 @@ Node 22.22.2+ or 24.15.0+ is required.
 
 ```sh
 npm run check   # node --check for the impact app, tsc --noEmit for the rest
-npm test        # impact model tests (63) and astrolab tests (37)
+npm test        # impact model tests (63) and astrolab tests (38)
 npm run build
 ```
 

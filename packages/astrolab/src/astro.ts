@@ -210,6 +210,48 @@ export function propagateKepler(sv: StateVector, mu: number, dt: number): StateV
   return kepler2cart({ ...el, nu }, mu);
 }
 
+/** Hyperbolic turn angle for excess speed vinf and periapsis radius rp. */
+export function turnAngle(vinf: number, rp: number, mu: number): number {
+  const e = 1 + (rp * vinf * vinf) / mu;
+  return 2 * Math.asin(1 / e);
+}
+
+export interface FlybyResult {
+  /** Turn angle, rad. */
+  delta: number;
+  /** Hyperbola eccentricity and periapsis speed. */
+  eHyp: number;
+  vPeriapsis: number;
+  /** Outbound planet-relative excess velocity (same magnitude as inbound). */
+  vinfOut: Vec3;
+  /** Change in the planet-relative velocity vector = heliocentric Δv imparted. */
+  deltaV: Vec3;
+}
+
+/**
+ * Unpowered gravity assist: rotate the inbound excess velocity by the turn
+ * angle about `axis` (the flyby-plane normal). Rotating about
+ * (vinf_in × planet velocity) turns the excess velocity toward the planet's
+ * motion: the trailing-side pass that speeds the spacecraft up. Pass the
+ * negated axis for a leading-side pass that slows it down.
+ */
+export function gravityAssist(vinfIn: Vec3, rp: number, mu: number, axis: Vec3): FlybyResult {
+  const vinf = v3.norm(vinfIn);
+  const delta = turnAngle(vinf, rp, mu);
+  const eHyp = 1 + (rp * vinf * vinf) / mu;
+  const n = v3.scale(axis, 1 / v3.norm(axis));
+  // Rodrigues rotation of vinfIn about n by delta.
+  const c = Math.cos(delta), s = Math.sin(delta);
+  const cross = v3.cross(n, vinfIn);
+  const dot = v3.dot(n, vinfIn);
+  const vinfOut: Vec3 = [
+    vinfIn[0] * c + cross[0] * s + n[0] * dot * (1 - c),
+    vinfIn[1] * c + cross[1] * s + n[1] * dot * (1 - c),
+    vinfIn[2] * c + cross[2] * s + n[2] * dot * (1 - c),
+  ];
+  return { delta, eHyp, vPeriapsis: Math.sqrt(vinf * vinf + (2 * mu) / rp), vinfOut, deltaV: v3.sub(vinfOut, vinfIn) };
+}
+
 /** Δv to leave a circular parking orbit of radius r onto a hyperbola with excess speed vinf (patched conics). */
 export const escapeDeltaV = (vinf: number, r: number, mu: number): number => Math.sqrt(vinf * vinf + (2 * mu) / r) - Math.sqrt(mu / r);
 

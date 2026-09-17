@@ -189,3 +189,23 @@ test("entry is exposed to the console with a struct of options", () => {
 });
 import * as IDX from "../src/index.ts";
 function require_index() { return IDX; }
+
+test("gravity assist turn angle and energy change", () => {
+  // Turn angle → 180° as rp → 0 and → 0 as rp → ∞; e = 1 + rp v²/μ.
+  close(A.turnAngle(1e3, 1e30, A.MU.jupiter), 0, 1e-9);
+  assert.ok(A.turnAngle(5.6e3, A.RADIUS.jupiter, A.MU.jupiter) > 2.7);
+  // Trailing-side pass adds heliocentric speed; leading-side removes the same amount (planar, symmetric).
+  const vPlanet: A.Vec3 = [0, 13.07e3, 0];
+  const vinfIn: A.Vec3 = [5.6e3 * Math.sin(2.1), 5.6e3 * Math.cos(2.1), 0];
+  const axis = A.v3.cross(vinfIn, vPlanet);
+  // A wide pass keeps the turn modest so the leading side clearly slows the spacecraft.
+  const rp = A.RADIUS.jupiter * 40;
+  const trailing = A.gravityAssist(vinfIn, rp, A.MU.jupiter, axis);
+  const leading = A.gravityAssist(vinfIn, rp, A.MU.jupiter, A.v3.scale(axis, -1));
+  close(A.v3.norm(trailing.vinfOut), A.v3.norm(vinfIn), 1e-9);
+  const vIn = A.v3.norm(A.v3.add(vPlanet, vinfIn));
+  const vTrail = A.v3.norm(A.v3.add(vPlanet, trailing.vinfOut));
+  const vLead = A.v3.norm(A.v3.add(vPlanet, leading.vinfOut));
+  assert.ok(vTrail > vIn && vLead < vIn, `in=${vIn} trail=${vTrail} lead=${vLead}`);
+  close(A.v3.norm(trailing.deltaV), 2 * A.v3.norm(vinfIn) * Math.sin(trailing.delta / 2), 1e-9);
+});

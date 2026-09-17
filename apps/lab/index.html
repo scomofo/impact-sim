@@ -28,6 +28,7 @@
           <button id="transfer-open" class="btn">Transfer tool</button>
           <button id="budget-open" class="btn">Budget tool</button>
           <button id="entry-open" class="btn">Entry tool</button>
+          <button id="flyby-open" class="btn">Flyby tool</button>
           <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
           <button id="clear" class="btn">Clear</button>
           <a class="btn link" href="../index.html">Suite</a>
@@ -161,6 +162,26 @@
         <div class="tool-actions">
           <button type="button" class="btn" id="entry-cancel">Cancel</button>
           <button type="button" class="btn" id="entry-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="flyby" class="tool">
+      <form id="flyby-form" method="dialog">
+        <div class="tool-title">Gravity assist / flyby</div>
+        <p class="tool-help">Unpowered hyperbolic flyby: the inbound excess velocity is rotated by the turn angle set by the periapsis radius. Reports the turn, the heliocentric speed change and the orbit before and after, and sweeps closest approach.</p>
+        <div class="tool-grid">
+          <label>Flyby planet <select name="body"></select></label>
+          <label>Flyby date <input name="date" type="date" required /></label>
+          <label>Inbound v∞ (km/s) <input name="vinf" type="number" step="any" value="5.6" required /></label>
+          <label>v∞ direction from planet velocity (deg) <input name="angle" type="number" step="any" value="120" /></label>
+          <label>Periapsis altitude (km) <input name="alt" type="number" step="any" value="300" /></label>
+          <label>Pass side <select name="side"><option value="trailing">Trailing (speeds up)</option><option value="leading">Leading (slows down)</option></select></label>
+          <label>Figure <select name="plot"><option value="sweep">Δv vs closest approach</option><option value="vectors">Velocity triangle</option></select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="flyby-cancel">Cancel</button>
+          <button type="button" class="btn" id="flyby-insert">Insert script</button>
           <button type="submit" class="btn primary">Generate &amp; run</button>
         </div>
       </form>

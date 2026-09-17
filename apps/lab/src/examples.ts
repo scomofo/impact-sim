@@ -25,6 +25,35 @@ title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
 % Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
   },
   {
+    title: "Gravity assist: Jupiter flyby pumps a Cassini-style orbit",
+    code: `% Unpowered Jupiter flyby: how much heliocentric energy does closest approach buy?
+mu = mu_jupiter; R = R_jupiter;
+[r_pl, v_pl] = ephemeris('jupiter', juliandate(2030, 1, 1));
+vhat = v_pl / norm(v_pl); hhat = cross(r_pl, v_pl) / norm(cross(r_pl, v_pl)); nhat = cross(hhat, vhat);
+vinf_in = 5.6e3 * (cos(deg2rad(120)) * vhat + sin(deg2rad(120)) * nhat);
+nrm = cross(vinf_in, v_pl);                 % trailing-side pass: spacecraft speeds up
+v_in = v_pl + vinf_in;
+
+alts = logspace(log10(0.1 * R), log10(60 * R), 150);
+dv = zeros(size(alts)); turn = zeros(size(alts)); Q = zeros(size(alts));
+for k = 1:numel(alts)
+  f = flyby(vinf_in, R + alts(k), mu, nrm);
+  v_out = v_pl + f.vinf_out;
+  dv(k) = (norm(v_out) - norm(v_in)) / 1e3;
+  turn(k) = rad2deg(f.delta);
+  el = cart2kepler(r_pl, v_out, mu_sun);
+  if el(2) < 1, Q(k) = el(1) * (1 + el(2)) / AU; else, Q(k) = NaN; end
+end
+semilogx(alts / R, dv, 'b-'); hold on; semilogx(alts / R, turn / 30, 'r--');
+legend('heliocentric dv (km/s)', 'turn angle / 30 (deg)');
+xlabel('periapsis altitude (Jupiter radii)'); ylabel('km/s'); title('Jupiter gravity assist, v-inf 5.6 km/s'); grid on;
+[dvmax, k] = max(dv);
+if isnan(Q(k)), tail = 'solar-system escape'; else, tail = sprintf('aphelion %.1f AU', Q(k)); end
+fprintf('max gain %.2f km/s at %.1f RJ: %s\\n', dvmax, alts(k) / R, tail);
+fprintf('Voyager-class check: 5 RJ pass turns %.0f deg\\n', rad2deg(turn_angle(5.6e3, 5 * R, mu)));
+% The Flyby tool (top bar) does this for any planet, date, approach angle and pass side.`,
+  },
+  {
     title: "Entry corridor: g-load and skip-out vs flight-path angle",
     code: `% Lunar-return capsule: how steep can you enter before the g-load is too high,
 % and how shallow before you skip back out? (Apollo-like capsule, 55 deg bank)

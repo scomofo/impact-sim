@@ -5,6 +5,7 @@ import { porkchopScript, PLANETS } from "./porkchop";
 import { transferScript, CENTRAL_BODIES } from "./transfer";
 import { budgetScript } from "./budget";
 import { entryScript, ENTRY_BODIES, ENTRY_PRESETS, type EntrySpec } from "./entrytool";
+import { flybyScript, type FlybySpec } from "./flybytool";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -292,6 +293,40 @@ eForm.addEventListener("submit", (ev) => {
   editor.value = s;
   eDialog.close();
   run(s, "entry tool");
+});
+
+// ---- Gravity assist tool --------------------------------------------------------
+const fDialog = $<HTMLDialogElement>("flyby");
+const fForm = $<HTMLFormElement>("flyby-form");
+{
+  const sel = fForm.elements.namedItem("body") as HTMLSelectElement;
+  for (const p of PLANETS) {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p[0]!.toUpperCase() + p.slice(1);
+    sel.appendChild(opt);
+  }
+  sel.value = "venus";
+  (fForm.elements.namedItem("date") as HTMLInputElement).value = inDays(365);
+}
+function buildFlybyScript(): string | null {
+  const data = new FormData(fForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const vinf = Number(get("vinf"));
+  if (!(vinf > 0)) { append("Flyby: v-infinity must be positive.\n", "err"); return null; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(get("date"))) { append("Flyby: enter a flyby date.\n", "err"); return null; }
+  return flybyScript({ body: get("body"), date: get("date"), vinf, angleDeg: Number(get("angle")) || 0, altitude: Math.max(0, Number(get("alt")) || 0), side: get("side") as FlybySpec["side"], plot: get("plot") as FlybySpec["plot"] });
+}
+$("flyby-open").addEventListener("click", () => fDialog.showModal());
+$("flyby-cancel").addEventListener("click", () => fDialog.close());
+$("flyby-insert").addEventListener("click", () => { const s = buildFlybyScript(); if (s) { editor.value = s; fDialog.close(); } });
+fForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildFlybyScript();
+  if (!s) return;
+  editor.value = s;
+  fDialog.close();
+  run(s, "flyby tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);
