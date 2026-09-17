@@ -107,7 +107,7 @@ deadband, the uncontrolled lifetime, and the J2 nodal drift with the
 sun-synchronous inclination for that altitude. In GEO it gives the lunisolar
 north–south drift for the mission years (18.6-year lunar cycle), the
 triaxiality east–west cycle for a longitude box, and the solar-pressure
-eccentricity that eats into that box. Underlying functions: `atm_density`,
+eccentricity that eats into that box. Underlying functions: `atm_rotation`,
 `drag_decay`, `reboost`, `orbit_lifetime`, `j2_rates`, `sunsync_inc`,
 `geo_inc_drift`, `geo_ns`, `geo_ew`, `geo_srp`, `mission_prop`.
 
@@ -125,7 +125,7 @@ Node 22.22.2+ or 24.15.0+ is required.
 
 ```sh
 npm run check   # node --check for the impact app, tsc --noEmit for the rest
-npm test        # impact model tests (63) and astrolab tests (45)
+npm test        # impact model tests (63) and astrolab tests (46)
 npm run build
 ```
 

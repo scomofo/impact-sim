@@ -335,8 +335,28 @@ const sDialog = $<HTMLDialogElement>("station");
 const sForm = $<HTMLFormElement>("station-form");
 {
   const regime = sForm.elements.namedItem("regime") as HTMLSelectElement;
+  const thirdPlot = sForm.querySelector<HTMLOptionElement>('select[name="plot"] option[value="lifetime"]')!;
+  // Mass and Isp are shared by both regimes, but a 500 kg / 220 s LEO bus and a
+  // 3 t / 300 s GEO bus are nothing alike; swap the defaults with the regime.
+  const shared: Record<string, Record<string, string>> = {
+    leo: { mass: "500", isp: "220" },
+    geo: { mass: "3000", isp: "300" },
+  };
+  let previous = regime.value;
   const sync = () => {
-    for (const fs of sForm.querySelectorAll<HTMLFieldSetElement>(".tool-fieldset")) fs.hidden = fs.dataset.regime !== regime.value;
+    for (const fs of sForm.querySelectorAll<HTMLFieldSetElement>(".tool-fieldset")) {
+      const off = fs.dataset.regime !== regime.value;
+      fs.hidden = off;
+      fs.disabled = off;   // keep the hidden regime's fields out of the FormData
+    }
+    thirdPlot.textContent = regime.value === "leo" ? "Uncontrolled decay vs time" : "Inclination drift vs year";
+    if (regime.value !== previous) {
+      for (const [name, value] of Object.entries(shared[regime.value]!)) {
+        const el = sForm.elements.namedItem(name) as HTMLInputElement;
+        if (el.value === shared[previous]![name]) el.value = value;   // only if untouched
+      }
+      previous = regime.value;
+    }
   };
   regime.addEventListener("change", sync);
   sync();
@@ -352,7 +372,7 @@ function buildStationScript(): string | null {
   return stationScript({
     regime, years, mass, isp, margin: Math.max(0, n("margin", 0)) / 100, plot: get("plot") as StationSpec["plot"],
     alt: n("alt", 400), inc: n("inc", 51.6), area: n("area", 4), cd: n("cd", 2.2), activity: get("activity") as StationSpec["activity"], deadband: Math.max(0.1, n("deadband", 2)),
-    lon: n("lon", -100), box: Math.max(0.005, n("box", 0.05)), year: Math.round(n("year", 2027)), srpArea: Math.max(0, n("srparea", 60)), cr: Math.max(0, n("cr", 1.3)), ibox: Math.max(0.005, n("ibox", 0.05)),
+    lon: ((n("lon", -100) % 360) + 540) % 360 - 180, box: Math.max(0.005, n("box", 0.05)), year: Math.round(n("year", 2027)), srpArea: Math.max(0, n("srparea", 60)), cr: Math.max(0, n("cr", 1.3)), ibox: Math.max(0.005, n("ibox", 0.05)),
   });
 }
 $("station-open").addEventListener("click", () => sDialog.showModal());

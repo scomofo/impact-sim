@@ -5,7 +5,9 @@ import { DAY, MU, RADIUS, YEAR, juliandate } from "../src/astro.ts";
 import { createConsole } from "../src/index.ts";
 
 const d2r = Math.PI / 180, r2d = 180 / Math.PI;
-const close = (a: number, b: number, rel = 1e-9, what = "") => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${what} ${a} != ${b}`);
+/** Genuinely relative comparison: |a - b| <= rel * |b|, with an absolute floor only when b is 0. */
+const close = (a: number, b: number, rel = 1e-9, what = "") =>
+  assert.ok(Math.abs(a - b) <= (b === 0 ? rel : rel * Math.abs(b)), `${what} ${a} != ${b} (rel ${Math.abs(a - b) / (b === 0 ? 1 : Math.abs(b))})`);
 
 test("exponential atmosphere reproduces Vallado Table 8-4 and its band structure", () => {
   close(K.atmosphericDensity(400e3), 3.725e-12, 1e-9);
@@ -48,6 +50,18 @@ test("ISS-class drag decay, reboost cycle and cubesat lifetimes", () => {
   assert.equal(K.orbitLifetime(90e3, 60), 0);
   close(K.rotatingAtmosphereFactor(RADIUS.earth + 400e3, 51.6 * d2r), 0.9215, 1e-3);
   close(K.rotatingAtmosphereFactor(RADIUS.earth + 400e3, Math.PI / 2), 1, 1e-12);
+  // Published sanity band: ISS-class drag make-up is tens of m/s per year over a solar cycle.
+  const issYear = K.dragDecay(a, 100, K.atmosphericDensity(410e3)).dvPerYear * K.rotatingAtmosphereFactor(a, 51.6 * d2r);
+  assert.ok(issYear > 15 && issYear < 50, `ISS drag make-up ${issYear} m/s/yr`);
+  // Lifetime is set by the decay, not by where the integration is stopped.
+  close(K.orbitLifetime(400e3, 60.606, "mean", 120e3) / DAY, K.orbitLifetime(400e3, 60.606) / DAY, 2e-2, "stop altitude");
+  // The per-revolution drop is the decay rate times the Keplerian period.
+  const T = 2 * Math.PI * Math.sqrt(a ** 3 / MU.earth);
+  close(d.daPerRev, d.dadt * T, 1e-12, "da per rev");
+  close(d.dvPerRev * (YEAR / T), d.dvPerYear, 1e-12, "dv per rev");
+  // Struct shape the console builtins depend on.
+  assert.deepEqual(Object.keys(d).sort(), ["aD", "beta", "dPPerRev", "dadt", "daPerRev", "dvPerRev", "dvPerYear", "period", "rho"].sort());
+  assert.deepEqual(Object.keys(rb).sort(), ["dvPerReboost", "dvPerYear", "interval", "reboostsPerYear"].sort());
 });
 
 test("J2 secular rates, sun-synchronous and repeat ground tracks", () => {
@@ -62,6 +76,12 @@ test("J2 secular rates, sun-synchronous and repeat ground tracks", () => {
   const sso = K.j2Rates(RADIUS.earth + 700e3, 0, 98 * d2r);
   close(sso.raanDot * r2d * DAY, 0.9632, 2e-3);
   assert.ok(Math.abs(K.j2Rates(26554e3, 0.74, K.CRITICAL_INCLINATION).argpDot) < 1e-18);
+  // Molniya apsidal rotation away from the critical inclination, and an equatorial orbit's prograde perigee drift.
+  const mol = K.j2Rates(26554e3, 0.74, 70 * d2r);
+  const pMol = 26554e3 * (1 - 0.74 ** 2), nMol = Math.sqrt(MU.earth / 26554e3 ** 3);
+  close(mol.argpDot, 1.5 * nMol * K.J2_BODIES.earth.j2 * (K.J2_BODIES.earth.radius / pMol) ** 2 * (2 - 2.5 * Math.sin(70 * d2r) ** 2), 1e-12, "molniya argp");
+  assert.ok(mol.argpDot < 0, "apsides regress above the critical inclination");
+  assert.ok(K.j2Rates(7000e3, 0, 0).argpDot > 0 && K.j2Rates(7000e3, 0, Math.PI / 2).argpDot < 0);
   assert.ok(Math.abs(K.j2Rates(7000e3, 0, Math.PI / 2).raanDot) < 1e-18);
   close(K.sunSyncInclination(RADIUS.earth + 500e3) * r2d, 97.402, 2e-4);
   close(K.sunSyncInclination(RADIUS.earth + 800e3) * r2d, 98.603, 2e-4);
@@ -98,8 +118,19 @@ test("GEO lunisolar inclination drift by year", () => {
   close(g90.moon[1] * r2d * YEAR, 0.5814, 5e-3);
   close(g90.totalRate * r2d * YEAR, 0.8605, 3e-3);
   const ns = K.geoNorthSouth(juliandate(2027, 7, 2), 0.05 * d2r);
+  const rate2027 = K.geoInclinationDrift(juliandate(2027, 7, 2)).totalRate;
+  close(ns.rate, rate2027, 1e-12, "ns rate");
+  close(ns.dvPerBurn, 2 * K.V_GEO * Math.sin(0.05 * d2r), 1e-12, "dv per burn");
   close(ns.dvPerBurn, 5.366, 1e-3);
-  close(ns.interval * ns.rate, 2 * 0.05 * d2r, 1e-9);
+  close(ns.dvPerYear, K.V_GEO * rate2027 * YEAR, 1e-12, "ns dv/yr");
+  // Crossing the 0.1 deg band at the 2027 drift rate takes about 47 days.
+  close(ns.interval / DAY, (2 * 0.05 * d2r) / rate2027 / DAY, 1e-12);
+  assert.ok(ns.interval / DAY > 30 && ns.interval / DAY < 70, `ns interval ${ns.interval / DAY} d`);
+  close(ns.burnsPerYear * ns.dvPerBurn, ns.dvPerYear, 2e-3, "burns x dv");
+  // A zero tolerance means continuous control: no interval, no per-burn dv.
+  const tight = K.geoNorthSouth(juliandate(2027, 7, 2), 0);
+  assert.equal(tight.interval, 0);
+  close(tight.dvPerYear, ns.dvPerYear, 1e-12);
 });
 
 test("GEO east-west triaxiality cycle and solar-pressure eccentricity", () => {

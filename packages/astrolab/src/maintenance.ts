@@ -51,28 +51,36 @@ export type SolarActivity = "low" | "mean" | "high";
 /**
  * Solar-activity multipliers on the table density by altitude (km): ratios of
  * SMAD's solar-minimum and solar-maximum columns to its mean column. "mean"
- * is the table itself. Rough knob: real densities vary ×3 (200 km) to ×30
- * (600 km) over a solar cycle.
+ * is the table itself. The low-altitude rows matter: the thermosphere barely
+ * responds to the solar cycle near 100 km (±5 %) and only diverges above
+ * ~200 km, so starting the ratios at 200 km would put a step in the density.
+ * Below the first row the factor is held at that row's value. Rough knob:
+ * real densities vary ×3 (200 km) to ×30 (600 km) over a solar cycle.
  */
 const ACTIVITY_FACTORS: ReadonlyArray<readonly [number, number, number]> = [
+  [100, 0.96, 1.06], [150, 0.91, 1.13],
   [200, 0.70, 1.39], [300, 0.42, 2.03], [400, 0.27, 2.78], [500, 0.18, 3.68],
   [600, 0.16, 4.70], [700, 0.21, 5.40], [800, 0.31, 4.56], [1000, 0.42, 3.17],
 ];
 
+/**
+ * Multiplier on the table density for low or high solar activity, log-interpolated
+ * between the rows above so density stays monotone in altitude.
+ */
 export function solarActivityFactor(h: number, activity: SolarActivity): number {
   if (activity === "mean") return 1;
   const col = activity === "low" ? 1 : 2;
   const hk = h / 1e3;
-  if (hk <= ACTIVITY_FACTORS[0]![0]) return hk < 150 ? 1 : ACTIVITY_FACTORS[0]![col];
+  if (hk <= ACTIVITY_FACTORS[0]![0]) return ACTIVITY_FACTORS[0]![col]!;
   const last = ACTIVITY_FACTORS[ACTIVITY_FACTORS.length - 1]!;
-  if (hk >= last[0]) return last[col];
+  if (hk >= last[0]) return last[col]!;
   for (let i = 1; i < ACTIVITY_FACTORS.length; i++) {
-    const [h1, ...f1] = ACTIVITY_FACTORS[i]!;
-    const [h0, ...f0] = ACTIVITY_FACTORS[i - 1]!;
-    if (hk <= h1) {
-      const t = (hk - h0) / (h1 - h0);
+    const row1 = ACTIVITY_FACTORS[i]!;
+    const row0 = ACTIVITY_FACTORS[i - 1]!;
+    if (hk <= row1[0]) {
+      const t = (hk - row0[0]) / (row1[0] - row0[0]);
       // Interpolate the logarithm so the factor stays positive and smooth.
-      return Math.exp(Math.log(f0[col - 1]!) + t * (Math.log(f1[col - 1]!) - Math.log(f0[col - 1]!)));
+      return Math.exp(Math.log(row0[col]!) + t * (Math.log(row1[col]!) - Math.log(row0[col]!)));
     }
   }
   return 1;
@@ -113,6 +121,8 @@ export interface DragDecay {
 /** Near-circular secular drag effects at semi-major axis a with ballistic coefficient beta = m/(C_D A). */
 export function dragDecay(a: number, beta: number, rho: number, mu = MU.earth): DragDecay {
   if (!(beta > 0)) throw new Error("dragDecay: ballistic coefficient must be positive");
+  if (!(a > 0)) throw new Error("dragDecay: semi-major axis must be positive");
+  if (!(rho >= 0)) throw new Error("dragDecay: density must not be negative");
   const v = Math.sqrt(mu / a);
   const period = 2 * Math.PI * Math.sqrt(a ** 3 / mu);
   const aD = (rho * mu) / (2 * beta * a);
@@ -301,6 +311,7 @@ export interface GeoNorthSouth {
 }
 
 export function geoNorthSouth(jd: number, iBox: number): GeoNorthSouth {
+  if (!(iBox >= 0)) throw new Error("geoNorthSouth: inclination tolerance must not be negative");
   const rate = geoInclinationDrift(jd).totalRate;
   const interval = rate > 0 ? (2 * iBox) / rate : Infinity;
   const dvPerBurn = 2 * V_GEO * Math.sin(iBox);
@@ -325,17 +336,20 @@ export interface GeoEastWest {
 }
 
 export function geoEastWest(lon: number, box: number): GeoEastWest {
+  if (!(box >= 0)) throw new Error("geoEastWest: longitude box must not be negative");
   const raw = geoLongitudeAcceleration(lon);
   // Treat rounding residuals at the equilibrium longitudes (peak is 4e-15 rad/s²) as zero.
   const acc = Math.abs(raw) < 1e-24 ? 0 : raw;
   const mag = Math.abs(acc);
   const dvPerYear = (A_GEO / 3) * mag * YEAR;
-  const cycle = mag > 0 && box > 0 ? 4 * Math.sqrt(box / mag) : Infinity;
+  // A zero-width box is the continuous-control limit: maneuver constantly, same annual cost.
+  // At an equilibrium longitude there is no drift, so the satellite never needs a maneuver.
+  const cycle = mag === 0 ? Infinity : box === 0 ? 0 : 4 * Math.sqrt(box / mag);
   const dvPerManeuver = mag > 0 ? ((4 * A_GEO) / 3) * Math.sqrt(box * mag) : 0;
   const wrap = (x: number) => ((x + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
   return {
     acceleration: acc, dvPerYear, cycle, dvPerManeuver,
-    maneuversPerYear: Number.isFinite(cycle) ? YEAR / cycle : 0,
+    maneuversPerYear: cycle === 0 ? Infinity : Number.isFinite(cycle) ? YEAR / cycle : 0,
     stable: [wrap(LAMBDA_22 + Math.PI / 2), wrap(LAMBDA_22 - Math.PI / 2)],
     unstable: [wrap(LAMBDA_22), wrap(LAMBDA_22 + Math.PI)],
   };
@@ -373,8 +387,15 @@ export interface MissionPropellant {
   finalMass: number;
 }
 
-/** Propellant for dvPerYear over `years` at Isp with a Δv margin fraction, from initial mass m0. */
+/**
+ * Propellant for dvPerYear over `years` at Isp with a Δv margin fraction, from
+ * initial mass m0. `perYear` always has at least one entry for a positive
+ * mission duration, so callers can index it without a length check.
+ */
 export function missionPropellant(m0: number, dvPerYear: number, years: number, isp: number, margin = 0): MissionPropellant {
+  if (!(m0 > 0)) throw new Error("missionPropellant: initial mass must be positive");
+  if (!(isp > 0)) throw new Error("missionPropellant: specific impulse must be positive");
+  if (!(years > 0)) throw new Error("missionPropellant: mission duration must be positive");
   const dvTotal = dvPerYear * years * (1 + margin);
   const perYear: number[] = [];
   let m = m0;
@@ -385,7 +406,9 @@ export function missionPropellant(m0: number, dvPerYear: number, years: number, 
     m -= dm;
   }
   const frac = years - whole;
-  if (frac > 1e-9) {
+  // A mission shorter than a year, or with a fractional tail, gets its own entry;
+  // a whole-year mission keeps exactly `years` entries.
+  if (frac > 0 || perYear.length === 0) {
     const dm = m * propellantFraction(dvPerYear * frac * (1 + margin), isp);
     perYear.push(dm);
     m -= dm;

@@ -200,7 +200,7 @@
           <label>Figure <select name="plot">
             <option value="sawtooth">Altitude / longitude vs time with maneuvers</option>
             <option value="sweep">Annual Δv vs altitude / longitude</option>
-            <option value="lifetime">Uncontrolled decay vs time (LEO)</option>
+            <option value="lifetime">Uncontrolled decay vs time</option>
           </select></label>
         </div>
         <fieldset class="tool-fieldset" data-regime="leo">
@@ -214,13 +214,13 @@
             <label>Altitude deadband (km) <input name="deadband" type="number" step="any" min="0.1" value="2" /></label>
           </div>
         </fieldset>
-        <fieldset class="tool-fieldset" data-regime="geo" hidden>
+        <fieldset class="tool-fieldset" data-regime="geo" hidden disabled>
           <legend>GEO</legend>
           <div class="tool-grid">
             <label>Station longitude (deg E, negative = W) <input name="lon" type="number" step="any" value="-100" /></label>
             <label>Longitude box half-width (deg) <input name="box" type="number" step="any" min="0.005" value="0.05" /></label>
             <label>Start year <input name="year" type="number" step="1" value="2027" /></label>
-            <label>Sunlit area (m²) <input name="srparea" type="number" step="any" value="60" /></label>
+            <label>Sunlit area (m²) <input name="srparea" type="number" step="any" value="120" /></label>
             <label>Reflectivity coefficient C_r <input name="cr" type="number" step="any" value="1.3" /></label>
             <label>Inclination box (deg) <input name="ibox" type="number" step="any" min="0.005" value="0.05" /></label>
           </div>
