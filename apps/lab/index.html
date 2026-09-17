@@ -25,6 +25,7 @@
             <select id="examples"></select>
           </label>
           <button id="porkchop-open" class="btn">Porkchop tool</button>
+          <button id="transfer-open" class="btn">Transfer tool</button>
           <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
           <button id="clear" class="btn">Clear</button>
           <a class="btn link" href="../index.html">Suite</a>
@@ -76,6 +77,26 @@
         <div class="tool-actions">
           <button type="button" class="btn" id="porkchop-cancel">Cancel</button>
           <button type="button" class="btn" id="porkchop-insert">Insert script</button>
+          <button type="submit" class="btn primary">Generate &amp; run</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="transfer" class="tool">
+      <form id="transfer-form" method="dialog">
+        <div class="tool-title">Hohmann / bi-elliptic transfer planner</div>
+        <p class="tool-help">Compares a Hohmann transfer with a bi-elliptic transfer between two circular orbits, sweeps the intermediate apoapsis, and optionally folds a plane change into the slowest burn.</p>
+        <div class="tool-grid">
+          <label>Central body <select name="body"></select></label>
+          <label>Orbit sizes given as <select name="mode"><option value="altitude">Altitude above surface (km)</option><option value="radius">Radius from centre (km)</option></select></label>
+          <label>Initial orbit (km) <input name="r1" type="number" step="any" value="300" required /></label>
+          <label>Final orbit (km) <input name="r2" type="number" step="any" value="35786" required /></label>
+          <label>Bi-elliptic apoapsis (× larger radius) <input name="ratio" type="number" step="any" min="1.01" value="3" /></label>
+          <label>Plane change (deg) <input name="di" type="number" step="any" min="0" max="180" value="0" /></label>
+          <label>Figure <select name="plot"><option value="dv">Δv versus intermediate apoapsis</option><option value="orbits">Orbit geometry</option></select></label>
+        </div>
+        <div class="tool-actions">
+          <button type="button" class="btn" id="transfer-cancel">Cancel</button>
+          <button type="button" class="btn" id="transfer-insert">Insert script</button>
           <button type="submit" class="btn primary">Generate &amp; run</button>
         </div>
       </form>

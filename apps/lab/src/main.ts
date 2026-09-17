@@ -2,6 +2,7 @@ import { createConsole, formatValue, RuntimeError, type PlotState, type Value } 
 import { isMatrix, isScalar, format, numel } from "@orbital-suite/astrolab";
 import { EXAMPLES } from "./examples";
 import { porkchopScript, PLANETS } from "./porkchop";
+import { transferScript, CENTRAL_BODIES } from "./transfer";
 import { drawFigure } from "./figure";
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -155,6 +156,42 @@ form.addEventListener("submit", (ev) => {
   editor.value = s;
   dialog.close();
   run(s, "porkchop tool");
+});
+
+// ---- Transfer planner tool ---------------------------------------------------
+const tDialog = $<HTMLDialogElement>("transfer");
+const tForm = $<HTMLFormElement>("transfer-form");
+{
+  const sel = tForm.elements.namedItem("body") as HTMLSelectElement;
+  for (const b of CENTRAL_BODIES) {
+    const opt = document.createElement("option");
+    opt.value = b;
+    opt.textContent = b[0]!.toUpperCase() + b.slice(1);
+    sel.appendChild(opt);
+  }
+  sel.value = "earth";
+}
+function buildTransferScript(): string | null {
+  const data = new FormData(tForm);
+  const get = (k: string) => String(data.get(k) ?? "");
+  const r1 = Number(get("r1")), r2 = Number(get("r2"));
+  const mode = get("mode") as "altitude" | "radius";
+  if (!(r1 >= 0 && r2 >= 0) || (mode === "radius" && (r1 <= 0 || r2 <= 0))) { append("Transfer: orbit sizes must be positive numbers.\n", "err"); return null; }
+  if (r1 === r2) { append("Transfer: the two orbits must differ.\n", "err"); return null; }
+  const ratio = Math.max(1.01, Number(get("ratio")) || 3);
+  const di = Math.min(180, Math.max(0, Number(get("di")) || 0));
+  return transferScript({ body: get("body"), mode, r1, r2, ratio, planeChangeDeg: di, plot: get("plot") as "dv" | "orbits" });
+}
+$("transfer-open").addEventListener("click", () => tDialog.showModal());
+$("transfer-cancel").addEventListener("click", () => tDialog.close());
+$("transfer-insert").addEventListener("click", () => { const s = buildTransferScript(); if (s) { editor.value = s; tDialog.close(); } });
+tForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const s = buildTransferScript();
+  if (!s) return;
+  editor.value = s;
+  tDialog.close();
+  run(s, "transfer tool");
 });
 
 new ResizeObserver(() => { if (lastPlot) drawFigure(canvas, lastPlot); }).observe(canvas);

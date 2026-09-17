@@ -7,7 +7,7 @@ numerical toolbox.
 | App | Path | Stack | What it does |
 | --- | --- | --- | --- |
 | Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
-| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, and a Lambert porkchop-plot tool. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling, plots, a Lambert porkchop-plot tool and a Hohmann/bi-elliptic transfer planner. |
 | Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
 | Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
 | Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
@@ -60,6 +60,15 @@ contourf(jd_dep - jd_dep(1), jd_arr - jd_arr(1), p.C3, [8 10 12 15 20 30 60]);
 Planet positions come from JPL's approximate Keplerian mean elements (valid
 1800–2050, Standish); `ephemeris('mars', jd)` exposes them directly, and
 `juliandate`, `jd2date` and `datestr` convert dates.
+
+### Transfer planner
+
+The **Transfer tool** button compares a Hohmann and a bi-elliptic transfer
+between two circular orbits around a chosen body (altitude or radius input),
+sweeps the intermediate apoapsis, folds an optional plane change into the
+slowest burn, and plots either Δv against apoapsis ratio or the orbit geometry.
+The underlying functions are `hohmann`, `bielliptic`, `planechange`,
+`visviva` and `vcirc`.
 
 Type `help` in the console for the full function list. The interpreter supports
 MATLAB's matrix literals (including whitespace-separated elements and `'`

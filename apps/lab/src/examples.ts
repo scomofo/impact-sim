@@ -25,6 +25,32 @@ title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
 % Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
   },
   {
+    title: "Hohmann vs bi-elliptic with plane change",
+    code: `% When does a bi-elliptic transfer beat Hohmann? Sweep the radius ratio.
+mu = mu_earth; r1 = R_earth + 300e3;
+ratios = linspace(2, 30, 120);
+dv_h = zeros(size(ratios)); dv_b = zeros(size(ratios));
+for k = 1:numel(ratios)
+  r2 = ratios(k) * r1;
+  h = hohmann(r1, r2, mu);          dv_h(k) = h.dv_total;
+  b = bielliptic(r1, r2, 40 * r2, mu); dv_b(k) = b.dv_total;
+end
+plot(ratios, dv_h / 1e3, 'r-'); hold on; plot(ratios, dv_b / 1e3, 'b-');
+legend('Hohmann', 'bi-elliptic, rB = 40 r2');
+xlabel('r2 / r1'); ylabel('total dv (km/s)'); title('circular-to-circular transfers'); grid on;
+
+% Crossover near 11.94 for an infinitely high intermediate apoapsis
+cross = fzero(@(x) hohmann(r1, x*r1, mu).dv_total - bielliptic(r1, x*r1, 1e4*r1, mu).dv_total, [10 14]);
+fprintf('Hohmann and bi-elliptic cost the same at r2/r1 = %.2f\\n', cross);
+
+% GTO from Cape Canaveral: fold the 28.5 deg plane change into the apogee burn
+h = hohmann(r1, 42164e3, mu);
+va = visviva(42164e3, h.a_transfer, mu); vc = vcirc(42164e3, mu);
+dv2 = sqrt(va^2 + vc^2 - 2*va*vc*cos(deg2rad(28.5)));
+fprintf('GEO insertion with plane change: %.0f m/s (vs %.0f coplanar)\\n', dv2, h.dv2);
+% The Transfer tool (top bar) generates a full comparison for any pair of orbits.`,
+  },
+  {
     title: "Hohmann transfer LEO → GEO",
     code: `% Hohmann transfer from a 300 km parking orbit to geostationary altitude
 r1 = R_earth + 300e3;
