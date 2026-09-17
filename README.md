@@ -1,67 +1,72 @@
-# Planetary Impact Simulator
+# Orbital Suite
 
-Explore hypothetical impacts on an Earth-size planet with analytical assessment readouts and an optional cinematic 3D view. Scenarios range from atmospheric airbursts to planetary collisions.
+A suite of space, orbital-mechanics and impact simulation software. It merges four
+previously separate projects into one workspace and adds a shared MATLAB-flavoured
+numerical toolbox.
 
-The app estimates impact consequences. It does not forecast an asteroid's collision probability, casualties, evacuation zones or coastal inundation. Some extensions are explicitly labeled heuristics. See [model methods and validation](docs/MODEL.md) for sources, assumptions and known gaps.
+| App | Path | Stack | What it does |
+| --- | --- | --- | --- |
+| Impact Simulator | `apps/impact` | vanilla JS, no build | Analytical assessment of asteroid/comet impacts with an optional cinematic 3D view and published benchmarks. |
+| Orbital Lab | `apps/lab` | TypeScript + Vite | MATLAB-syntax command window: matrices, `ode45`, Kepler, Lambert, Hohmann, CR3BP, impact scaling and plots. |
+| Libration | `apps/libration` | React + canvas | Lagrange points and halo orbits in the circular restricted three-body problem (from *Apoapsis*). |
+| Helios | `apps/helios` | React + three.js | 3D solar-system observatory with Keplerian and N-body propagation and resonance views. |
+| Stackyard | `apps/stackyard` | React + three.js + Rapier | Rigid-body physics playground. |
+
+| Package | Path | What it does |
+| --- | --- | --- |
+| astrolab | `packages/astrolab` | Zero-dependency TypeScript toolbox with MATLAB-style APIs: dense matrices, Dormand–Prince `ode45` with events, `fzero`/`fminsearch`/`polyfit`/`interp1`, orbital elements ↔ state vectors, Kepler's equation, Lambert, Hohmann and bi-elliptic transfers, CR3BP dynamics and Lagrange points, Collins-et-al. impact scaling, and the MATLAB-subset interpreter that powers Orbital Lab. |
 
 ## Run
 
-Serve this directory over HTTP; no build step is needed:
-
 ```sh
-python3 -m http.server 8742
+npm ci            # installs every workspace
+npm run build     # builds the four Vite apps into apps/*/dist
+python3 -m http.server 8742   # then open http://localhost:8742
 ```
 
-Open http://localhost:8742. Three.js and Earth textures load from pinned CDN URLs. If the 3D module, graphics initialization, rendering frame or WebGL context fails, numerical controls, comparisons and report export remain available. The unavailable 3D controls are disabled; reload to retry graphics. Export custom inputs before reloading.
+The landing page at the repository root links every app. Individual apps:
 
-## Assess a scenario
+```sh
+npm run dev:lab          # Orbital Lab on http://localhost:5173
+npm run dev:libration
+npm run dev:helios
+npm run dev:stackyard
+npm run dev:impact       # static server for the Impact Simulator
+```
 
-- Choose a catalog event or enter exact diameter, speed, angle and density. Preset values survive slider rounding. Speed is before atmospheric entry; angle is above horizontal.
-- Select target terrain and, for water impacts, water depth. Clicking the globe changes a visual marker; it does not look up terrain or population.
-- Enter observer distance to inspect pressure, heat, shaking, ejecta and illustrative open-water amplitude where the model supports them.
-- Expand model assumptions and input sensitivity. Vary diameter, speed, density or angle at ±5%, ±10%, ±20% or ±50%, one input at a time. Clipped samples are labeled; these are not confidence intervals.
-- Export JSON to preserve exact inputs, model version, sources, assumptions and observer results. Compare up to four scenarios.
-- Launch and scrub the 3D illustration. Pause freezes the automatic camera; manual orbit remains available. Hidden tabs suspend rendering without fast-forwarding on return. Reduced-motion preferences default to a free camera; the cinematic camera can still be explicitly enabled. Animation time, sizes and wave fronts are cinematic, not geographical hazard boundaries.
+## Orbital Lab in one minute
 
-The pale thermal highlight shows the calculated primary exposure extent without enlarging small footprints or depicting a spreading fire. Atmospheric transport, climate response, re-entry heating and antipodal damage are not calculated. Automatic global dust/dimming, planet-wide molten coloration and invented secondary explosions have been removed. See the [post-impact scientific audit](docs/POST_IMPACT.md) for current research, remaining schematic effects and the work needed for a physical aftermath model.
+```matlab
+r1 = R_earth + 300e3; r2 = 42164e3;
+h = hohmann(r1, r2, mu_earth)            % struct with dv1, dv2, dv_total, tof
+[r, v] = kepler2cart([7000e3 0.01 deg2rad(51.6) 0 0 0], mu_earth);
+[t, y] = ode45(twobody(mu_earth), [0 period(7000e3, mu_earth)], [r; v], odeset('RelTol', 1e-9));
+plot(y(:,1), y(:,2)); axis equal; title('one orbit');
+s = impact(140, 3000, 20e3, deg2rad(45)); fprintf('%.0f Mt\n', s.energy_Mt);
+```
 
-Share an unmodified catalog preset with `?p=bennu`, `?p=ries`, `?p=theia`, etc. Custom input changes clear the preset URL; use JSON export to preserve custom scenarios.
-
-Catalog values are illustrative rather than fitted historical reconstructions. When a reference crater diameter exists, the app shows it beside the calculated result so disagreement is visible. Updated source notes include Hiawatha's age, Nadir's inferred water depth and the time window of NASA's 2021 Bennu risk estimate.
-
-## Inspect the evidence
-
-Open [Model benchmarks](benchmarks.html) for three published examples, live model outputs, signed percentage differences and exportable comparison data. The 3% display tolerance is a review aid, not a claim of scientific accuracy. Known ejecta and large-impact blast discrepancies remain visible.
-
-Every catalog event has scoped source links and a per-input evidence breakdown. An observed structure does not establish the projectile's diameter, density, speed or trajectory. See [catalog provenance](docs/CATALOG.md) for corrections and remaining evidence gaps.
-
-Assessment JSON now uses schema 2, with catalog provenance and all four one-at-a-time sensitivity analyses. The original diameter `sensitivity.scenarios` array remains available; `selectedParameter` records the displayed comparison and `fraction` records the chosen relative perturbation. Numeric sample values stay in SI units (angles in degrees), with separate display conversion metadata.
+Type `help` in the console for the full function list. The interpreter supports
+MATLAB's matrix literals (including whitespace-separated elements and `'`
+transpose), `end` and logical indexing, `:` ranges, element-wise and matrix
+operators, `if`/`for`/`while`, script-local `function` definitions, anonymous
+functions, multiple return values, structs, `sprintf`/`fprintf`, and the
+`plot`/`hold`/`axis`/`grid`/`legend` family. Complex numbers and cell arrays are
+not supported.
 
 ## Development checks
 
-Node 22.22.2+ or 24.15.0+ (supported LTS versions) is required only for development tests:
+Node 22.22.2+ or 24.15.0+ is required.
 
 ```sh
-npm ci
-npm run check
-npm test
+npm run check   # node --check for the impact app, tsc --noEmit for the rest
+npm test        # impact model tests (63) and astrolab tests (31)
+npm run build
 ```
 
-Tests include published calculation examples, conservation and boundary checks, a 3,840-scenario grid, DOM interactions, report exports and renderer-failure recovery. GitHub Actions runs the checks for pushes and pull requests. Browser visual review remains a separate gate; see [validation limits](docs/MODEL.md#verification-and-remaining-limits).
+GitHub Actions runs all three for pushes and pull requests.
 
-## Architecture
+## Provenance
 
-| File | Role |
-| --- | --- |
-| `js/physics.js` | Validated SI input boundary, entry, cratering, observer effects and collision scaling |
-| `js/assessment.js` | Model provenance, assumptions, sensitivity samples and portable JSON reports |
-| `js/app.js`, `js/startup.js` | Entry point, calculation-first startup and optional 3D failure handling |
-| `js/scene-runtime.js` | Frame scheduling, background suspension and context-loss boundary |
-| `js/catalog.js`, `js/catalog-evidence.js` | Historical/hypothetical scenarios and scoped input provenance |
-| `js/benchmarks.js`, `js/benchmark-page.js` | Published reference comparisons and dashboard |
-| `js/ui.js` | Exact inputs, validation, readouts, comparisons and export |
-| `js/main.js` | Optional Three.js scene, camera, launch/replay state |
-| `js/effects.js` | Cinematic particles, waves, craters and debris effects |
-| `js/visual-model.js`, `js/wave-front.js` | Scoped exposure visualization and localized wave shader envelope |
-
-The scientific baseline is [Collins, Melosh & Marcus (2005)](https://doi.org/10.1111/j.1945-5100.2005.tb00157.x), with [Collins et al. (2017)](https://doi.org/10.1111/maps.12873) informing airburst assumptions. Giant-impact scaling references [Leinhardt & Stewart (2012)](https://doi.org/10.1088/0004-637X/745/1/79) and [Genda et al. (2012)](https://arxiv.org/abs/1109.4330). This implementation's documented deviations and heuristics are part of the assessment, not hidden calibration.
+- `apps/impact` is the original [impact-sim](https://github.com/scomofo/impact-sim) app, moved unchanged into the workspace. See its [README](apps/impact/README.md), [model methods](apps/impact/docs/MODEL.md) and [catalog provenance](apps/impact/docs/CATALOG.md).
+- `apps/libration`, `apps/helios` and `apps/stackyard` carry the simulation code from the [Apoapsis](https://github.com/scomofo/Apoapsis), [Helios](https://github.com/scomofo/Helios) and [Stackyard](https://github.com/scomofo/Stackyard) repositories. Those repositories were generated inside an app-builder sandbox and bundled a large auth/database/PWA scaffold that the simulations never used; only the simulation, HUD and styling sources were kept, each wrapped in a plain Vite + React entry point.
+- `packages/astrolab` follows the formulas in Curtis, *Orbital Mechanics for Engineering Students*; Bate, Mueller & White; Hairer, Nørsett & Wanner (Dormand–Prince); and Collins, Melosh & Marcus (2005) for impact scaling. Tests reproduce worked examples from those sources.

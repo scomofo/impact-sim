@@ -1,4 +1,4 @@
-name: Validate assessment model
+name: Validate suite
 on: [push, pull_request]
 permissions:
   contents: read
@@ -10,6 +10,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - run: npm run build

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbital Lab</title>
+    <meta name="description" content="A MATLAB-syntax command window for orbital mechanics: matrices, ode45, Kepler, Lambert, Hohmann and impact scaling, with plots." />
+    <meta name="theme-color" content="#0a0c10" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-title">Orbital Lab</span>
+          <span class="brand-sub">MATLAB-style command window · astrolab toolbox</span>
+        </div>
+        <div class="topbar-actions">
+          <label class="select-label">
+            Examples
+            <select id="examples"></select>
+          </label>
+          <button id="run" class="btn primary" title="Ctrl/Cmd+Enter">Run script</button>
+          <button id="clear" class="btn">Clear</button>
+          <a class="btn link" href="../index.html">Suite</a>
+        </div>
+      </header>
+      <main class="workspace">
+        <section class="pane editor-pane">
+          <div class="pane-title">Script</div>
+          <textarea id="editor" spellcheck="false"></textarea>
+        </section>
+        <section class="pane console-pane">
+          <div class="pane-title">Command window</div>
+          <pre id="output" class="output" aria-live="polite"></pre>
+          <div class="prompt-row">
+            <span class="prompt">&gt;&gt;</span>
+            <input id="prompt" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, e.g. hohmann(R_earth+400e3, 42164e3, mu_earth)" />
+          </div>
+        </section>
+        <section class="pane figure-pane">
+          <div class="pane-title">Figure</div>
+          <canvas id="figure"></canvas>
+          <div id="figure-empty" class="figure-empty">plot(x, y) draws here</div>
+        </section>
+        <section class="pane vars-pane">
+          <div class="pane-title">Workspace</div>
+          <table id="vars" class="vars"><thead><tr><th>Name</th><th>Size</th><th>Class</th><th>Value</th></tr></thead><tbody></tbody></table>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
