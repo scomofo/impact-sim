@@ -6,6 +6,7 @@ import * as N from "../numeric.ts";
 import * as A from "../astro.ts";
 import * as I from "../impact.ts";
 import * as E from "../entry.ts";
+import * as K from "../maintenance.ts";
 import { ode45, ode4, type OdeOptions } from "../ode.ts";
 import {
   RuntimeError, formatValue, isFunction, isStruct, logical, struct, toMat, toNumber, typeName,
@@ -550,6 +551,61 @@ def("entry", (a) => {
   });
 }, "s = entry('earth', v0, gamma0, h0, struct('m',..,'A',..,'CD',..,'LD',0,'bank',0,'rn',1,'h_stop',0,'v_stop',0))");
 
+// ---- orbit maintenance -----------------------------------------------------------
+
+const activityArg = (v: Value | undefined): K.SolarActivity => {
+  if (v === undefined) return "mean";
+  if (typeof v !== "string" || !["low", "mean", "high"].includes(v)) throw new RuntimeError("solar activity must be 'low', 'mean' or 'high'");
+  return v as K.SolarActivity;
+};
+const j2BodyArg = (v: Value | undefined): K.J2Body => {
+  if (v === undefined) return "earth";
+  if (typeof v !== "string" || !(v.toLowerCase() in K.J2_BODIES)) throw new RuntimeError(`J2 body must be one of ${Object.keys(K.J2_BODIES).join(", ")}`);
+  return v.toLowerCase() as K.J2Body;
+};
+def("atm_density", (a) => { const act = activityArg(a[1]); return M.map(mat(a, 0, "h"), (h) => K.atmosphericDensity(h, act)); }, "rho = atm_density(h, ['low'|'mean'|'high']) Vallado exponential atmosphere, h in m");
+def("atm_rotation", (a) => M.map(mat(a, 0, "h"), (h) => K.rotatingAtmosphereFactor(A.RADIUS.earth + h, num(a, 1, "inclination"))), "f = atm_rotation(h, i) rotating-atmosphere factor on drag (circular orbit)");
+def("drag_decay", (a) => {
+  const h = num(a, 0, "h"), m = num(a, 1, "mass"), area = num(a, 2, "area"), cd = num(a, 3, "CD");
+  const act = activityArg(a[4]);
+  const d = K.dragDecay(A.RADIUS.earth + h, m / (cd * area), K.atmosphericDensity(h, act));
+  return struct({ rho: d.rho, beta: d.beta, a_D: d.aD, dadt: d.dadt, da_rev: d.daPerRev, dP_rev: d.dPPerRev, dv_rev: d.dvPerRev, dv_year: d.dvPerYear, T: d.period });
+}, "s = drag_decay(h, m, A, CD, [activity]) secular drag effects for a near-circular orbit");
+def("orbit_lifetime", (a) => M.toMatrix(K.orbitLifetime(num(a, 0, "h0"), num(a, 1, "mass") / (num(a, 3, "CD") * num(a, 2, "area")), activityArg(a[4]), a.length > 5 ? num(a, 5, "h_stop") : 100e3)), "t = orbit_lifetime(h0, m, A, CD, [activity, h_stop]) uncontrolled decay time, s");
+def("decay_time", (a) => M.toMatrix(K.decayTime(num(a, 0, "h_top"), num(a, 1, "h_bottom"), num(a, 2, "mass") / (num(a, 4, "CD") * num(a, 3, "area")), activityArg(a[5]))), "t = decay_time(h_top, h_bottom, m, A, CD, [activity])");
+def("reboost", (a) => {
+  const r = K.reboostCycle(num(a, 0, "h_hi"), num(a, 1, "dh"), num(a, 2, "mass") / (num(a, 4, "CD") * num(a, 3, "area")), activityArg(a[5]));
+  return struct({ interval: r.interval, dv_reboost: r.dvPerReboost, per_year: r.reboostsPerYear, dv_year: r.dvPerYear });
+}, "s = reboost(h_hi, dh, m, A, CD, [activity]) deadband reboost cycle");
+def("j2_rates", (a) => {
+  const r = K.j2Rates(num(a, 0, "a"), num(a, 1, "e"), num(a, 2, "i"), j2BodyArg(a[3]));
+  return struct({ raan_dot: r.raanDot, argp_dot: r.argpDot, M_dot: r.meanAnomalyDot, T_kepler: r.keplerPeriod, T_nodal: r.nodalPeriod, T_anom: r.anomalisticPeriod, revs_per_day: r.revsPerNodalDay });
+}, "s = j2_rates(a, e, i, ['earth'|'moon'|'mars']) secular J2 rates (rad/s) and periods");
+def("sunsync_inc", (a) => M.map(mat(a, 0, "a"), (x) => K.sunSyncInclination(x, a.length > 1 ? num(a, 1, "e") : 0, j2BodyArg(a[2]))), "i = sunsync_inc(a, [e, body]) sun-synchronous inclination, rad");
+def("sunsync_a", (a) => M.map(mat(a, 0, "i"), (x) => K.sunSyncSemiMajorAxis(x, a.length > 1 ? num(a, 1, "e") : 0, j2BodyArg(a[2]))), "a = sunsync_a(i, [e, body])");
+def("i_crit", () => M.toMatrix(K.CRITICAL_INCLINATION), "critical inclination atan(2), rad");
+def("a_geo", () => M.toMatrix(K.A_GEO), "geostationary radius, m");
+def("v_geo", () => M.toMatrix(K.V_GEO), "geostationary speed, m/s");
+def("omega_earth", () => M.toMatrix(K.OMEGA_EARTH), "Earth rotation rate, rad/s");
+def("lunar_node", (a) => M.map(mat(a, 0, "jd"), K.lunarNodeLongitude), "Om = lunar_node(jd) mean longitude of the Moon's ascending node, rad");
+def("geo_inc_drift", (a) => {
+  const g = K.geoInclinationDrift(num(a, 0, "jd"));
+  return struct({ sun: g.sunRate, moon: g.moonRate, total: g.totalRate, direction: g.direction, moon_inc_eq: g.moonEquatorialInclination, dv_ns_year: K.V_GEO * g.totalRate * A.YEAR, ix_dot: g.total[0], iy_dot: g.total[1] });
+}, "s = geo_inc_drift(jd) lunisolar GEO inclination drift (rad/s) and annual N-S dv");
+def("geo_ns", (a) => { const r = K.geoNorthSouth(num(a, 0, "jd"), num(a, 1, "i_box")); return struct({ rate: r.rate, dv_year: r.dvPerYear, interval: r.interval, dv_burn: r.dvPerBurn, burns_year: r.burnsPerYear }); }, "s = geo_ns(jd, i_box) north-south station-keeping cycle for an inclination tolerance (rad)");
+def("geo_ew", (a) => {
+  const r = K.geoEastWest(num(a, 0, "longitude"), a.length > 1 ? num(a, 1, "box") : 0.05 * Math.PI / 180);
+  return struct({ accel: r.acceleration, dv_year: r.dvPerYear, cycle: r.cycle, dv_maneuver: r.dvPerManeuver, maneuvers_year: r.maneuversPerYear, stable: M.rowvec(r.stable), unstable: M.rowvec(r.unstable) });
+}, "s = geo_ew(lon, [box]) east-west (triaxiality) cycle; lon and box in rad");
+def("geo_lon_accel", (a) => M.map(mat(a, 0, "longitude"), K.geoLongitudeAcceleration), "acc = geo_lon_accel(lon) J22 longitude acceleration, rad/s^2");
+def("geo_srp", (a) => { const r = K.srpEccentricity(num(a, 0, "C_r"), num(a, 1, "A/m")); return struct({ a_srp: r.aSrp, e_natural: r.eNatural, libration: r.libration, dv_cancel_year: r.dvCancelPerYear }); }, "s = geo_srp(C_r, A_over_m) solar-pressure eccentricity at GEO");
+def("mission_prop", (a, nargout) => {
+  const r = K.missionPropellant(num(a, 0, "m0"), num(a, 1, "dv_year"), num(a, 2, "years"), num(a, 3, "isp"), a.length > 4 ? num(a, 4, "margin") : 0);
+  const s = struct({ dv_total: r.dvTotal, propellant: r.propellant, per_year: M.rowvec(r.perYear), final_mass: r.finalMass });
+  return nargout >= 2 ? [M.toMatrix(r.propellant), M.rowvec(r.perYear)] : s;
+}, "s = mission_prop(m0, dv_year, years, isp, [margin]) propellant over a mission from initial mass");
+def("prop_from_dry", (a) => M.map(mat(a, 0, "dv"), (dv) => K.propellantFromDry(num(a, 1, "m_dry"), dv, num(a, 2, "isp"))), "m_p = prop_from_dry(dv, m_dry, isp)");
+
 // ---- impacts -----------------------------------------------------------------
 
 def("impact", (a) => {
@@ -666,10 +722,11 @@ def("help", (a, _n, interp) => {
     interp.host.print(f ? `  ${a[0]}: ${f.help || "(no help text)"}\n` : `  '${a[0]}' not found.\n`);
     return;
   }
-  const groups: Record<string, string[]> = { "Orbital mechanics": [], Impacts: [], Solvers: [], "Matrices & maths": [], Plotting: [] };
+  const groups: Record<string, string[]> = { "Orbital mechanics": [], "Orbit maintenance": [], Impacts: [], Solvers: [], "Matrices & maths": [], Plotting: [] };
   for (const [name, f] of fns) {
     const h = (f as FunctionValue & { help?: string }).help ?? "";
     if (["juliandate", "jd2date", "datestr", "ephemeris", "porkchop", "kepler2cart", "cart2kepler", "keplerE", "mean2true", "true2mean", "period", "visviva", "vcirc", "vesc", "hohmann", "bielliptic", "planechange", "synodic", "soi", "hill", "lambert", "turn_angle", "flyby", "escape_dv", "capture_dv", "prop_fraction", "twobody", "cr3bp", "jacobi", "lagrange", "propagate", "kepler_propagate"].includes(name)) groups["Orbital mechanics"]!.push(name);
+    else if (["atm_density", "atm_rotation", "drag_decay", "orbit_lifetime", "decay_time", "reboost", "j2_rates", "sunsync_inc", "sunsync_a", "i_crit", "a_geo", "v_geo", "omega_earth", "lunar_node", "geo_inc_drift", "geo_ns", "geo_ew", "geo_lon_accel", "geo_srp", "mission_prop", "prop_from_dry"].includes(name)) groups["Orbit maintenance"]!.push(name);
     else if (["impact", "overpressure", "thermal", "fireball", "entry", "atmosphere"].includes(name)) groups["Impacts"]!.push(name);
     else if (["ode45", "ode4", "odeset", "fzero", "fminsearch", "fminbnd", "integral", "trapz", "interp1", "polyfit", "polyval", "roots"].includes(name)) groups["Solvers"]!.push(name);
     else if (["plot", "semilogy", "semilogx", "loglog", "contour", "contourf", "hold", "figure", "xlabel", "ylabel", "title", "legend", "grid", "axis", "clf", "close"].includes(name)) groups["Plotting"]!.push(name);

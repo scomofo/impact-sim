@@ -151,6 +151,9 @@ export class Interpreter {
 
   run(src: string): void {
     this.steps = 0;
+    // Each top-level run starts with hold off so one script's `hold on` cannot
+    // leak its series into the next script's figure.
+    this.plotState.hold = false;
     let stmts: Stmt[];
     try {
       stmts = parse(src);

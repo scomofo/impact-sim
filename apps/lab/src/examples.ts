@@ -25,6 +25,36 @@ title('Earth-Mars departure C3 (km^2/s^2)'); grid on;
 % Use the Porkchop tool (top bar) to regenerate this for other bodies or dates.`,
   },
   {
+    title: "Station-keeping: how altitude and the solar cycle set reboost cost",
+    code: `% Drag make-up dv per year for a 500 kg / 4 m^2 spacecraft across altitudes and solar activity
+m = 500; A = 4; CD = 2.2;
+alts = linspace(300e3, 900e3, 100);
+for act = ['l' 'm' 'h']
+  if act == 'l', name = 'low'; elseif act == 'm', name = 'mean'; else, name = 'high'; end
+  dv = zeros(size(alts));
+  for k = 1:numel(alts), dv(k) = drag_decay(alts(k), m, A, CD, name).dv_year; end
+  semilogy(alts / 1e3, dv); hold on;
+end
+legend('solar min', 'mean', 'solar max'); xlabel('altitude (km)'); ylabel('m/s per year');
+title('annual drag make-up dv'); grid on;
+
+% Uncontrolled lifetime from 400 and 550 km, and an ISS-class reboost cycle
+fprintf('lifetime from 400 km: %.2f yr (mean), %.2f yr (solar max)\\n', ...
+  orbit_lifetime(400e3, m, A, CD) / year, orbit_lifetime(400e3, m, A, CD, 'high') / year);
+fprintf('lifetime from 550 km: %.1f yr (mean)\\n', orbit_lifetime(550e3, m, A, CD) / year);
+rb = reboost(420e3, 20e3, 420000, 2000, 2.1);
+fprintf('ISS-class: reboost every %.0f days, %.1f m/s each, %.1f m/s/yr\\n', rb.interval / day, rb.dv_reboost, rb.dv_year);
+
+% GEO: north-south dominates and follows the 18.6-year lunar cycle
+for y = [2015 2025 2034]
+  g = geo_inc_drift(juliandate(y, 7, 2));
+  fprintf('GEO %d: inclination drift %.3f deg/yr -> %.1f m/s/yr north-south\\n', y, rad2deg(g.total) * year, g.dv_ns_year);
+end
+ew = geo_ew(deg2rad(-100), deg2rad(0.05));
+fprintf('GEO at 100 W: east-west %.2f m/s/yr, maneuver every %.0f days\\n', ew.dv_year, ew.cycle / day);
+% The Station-keeping tool (top bar) builds the full budget with propellant for a LEO or GEO mission.`,
+  },
+  {
     title: "Gravity assist: Jupiter flyby pumps a Cassini-style orbit",
     code: `% Unpowered Jupiter flyby: how much heliocentric energy does closest approach buy?
 mu = mu_jupiter; R = R_jupiter;

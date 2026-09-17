@@ -117,6 +117,16 @@ test("plot commands accumulate state and respect hold", () => {
   assert.equal(last.xlabel, "x");
 });
 
+test("hold on does not leak from one run into the next", () => {
+  let plots: PlotState[] = [];
+  const c = createConsole({ print: () => {}, plot: (p) => plots.push(structuredClone({ ...p })) });
+  c.run("plot(1:3, [400 401 402]); hold on;");
+  plots = [];
+  c.run("plot(1:3, [1 2 3]);");
+  assert.equal(plots.at(-1)!.series.length, 1);
+  assert.deepEqual(plots.at(-1)!.series[0]!.y, [1, 2, 3]);
+});
+
 test("errors carry line numbers", () => {
   assert.throws(() => run("x = 1;\ny = undefined_thing + 1;"), /line 2|undefined_thing/);
   assert.throws(() => run("[1 2] + [1 2 3]"), /dimensions must agree/);
