@@ -100,11 +100,11 @@ export function simulateEntry({ L0, rhoI, v0, angleDeg }) {
   const If = (4.07 * CD * SCALE_H * Yi) / (rhoI * L0 * v0 * v0 * sinT);       // Eq. 12
   if (If >= 1) {
     const vTerm = Math.sqrt((4 * rhoI * L0 * EARTH.g) / (3 * CD * RHO_AIR0));
-    return { outcome: 'surface', vSurface: Math.min(v0, Math.max(vIntact(0), vTerm)), dispersion: L0 };
+    return { outcome: 'surface', vSurface: Math.min(v0, Math.max(vIntact(0), vTerm)), dispersion: L0, peakQ: 0.5 * RHO_AIR0 * v0 * v0 };
   }
   const zStar = -SCALE_H * (Math.log(Yi / (RHO_AIR0 * v0 * v0)) +
     1.308 - 0.314 * If - 1.303 * Math.sqrt(1 - If));                          // Eq. 11
-  if (zStar <= 0) return { outcome: 'surface', vSurface: vIntact(0), dispersion: L0 };
+  if (zStar <= 0) return { outcome: 'surface', vSurface: vIntact(0), dispersion: L0, peakQ: 0.5 * RHO_AIR0 * v0 * v0 };
   const vStar = vIntact(zStar);
   const l = L0 * sinT * Math.sqrt(rhoI / (CD * rhoAir(zStar)));               // Eq. 16
   const zBurst = zStar - 2 * SCALE_H *
@@ -120,10 +120,12 @@ export function simulateEntry({ L0, rhoI, v0, angleDeg }) {
     }
     return vStar * Math.exp((-3 * CD * I) / (4 * rhoI * L0 ** 3 * sinT));
   };
+  const peakQ = 0.5 * rhoAir(zStar) * vStar * vStar;
+  const pancakeSpeed = vStar * Math.sqrt(CD * rhoAir(zStar) / rhoI) / sinT;  // Lateral expansion velocity (Chyba et al. 1993 / CM&M Eq. 14)
   if (zBurst > 0) {
-    return { outcome: 'airburst', zBreakup: zStar, zBurst, vBurst: vPancake(zBurst), dispersion: Lz(zBurst) };
+    return { outcome: 'airburst', zBreakup: zStar, zBurst, vBurst: vPancake(zBurst), dispersion: Lz(zBurst), peakQ, pancakeSpeed, yieldPa: Yi };
   }
-  return { outcome: 'surface', zBreakup: zStar, vSurface: vPancake(0), dispersion: Lz(0) };
+  return { outcome: 'surface', zBreakup: zStar, vSurface: vPancake(0), dispersion: Lz(0), peakQ, pancakeSpeed, yieldPa: Yi };
 }
 
 // ---------------------------------------------------------------------------

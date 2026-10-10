@@ -102,6 +102,13 @@ test('airburst accounts for deposited and remaining energy; yield is explicit', 
   assertFinite(obs);
 });
 
+test('entry simulation calculates peak dynamic pressure and pancake expansion speed', () => {
+  const entry = simulateEntry({ L0: 20, rhoI: 3000, v0: 19000, angleDeg: 18 });
+  assert.ok(entry.peakQ > 0);
+  assert.ok(entry.pancakeSpeed > 0);
+  assert.ok(entry.yieldPa > 0);
+});
+
 test('ocean energy loss affects solid-ground effects, preserving surface blast and heat', () => {
   const dry = computeImpact(nominal);
   const wet = computeImpact({ ...nominal, target: 'ocean', waterDepth: 3800 });

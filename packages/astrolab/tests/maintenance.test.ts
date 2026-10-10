@@ -69,7 +69,7 @@ test("J2 secular rates, sun-synchronous and repeat ground tracks", () => {
   close(gps.raanDot * r2d * DAY, -0.03878, 2e-3);
   close(gps.nodalPeriod, 43076.48, 1e-5);
   const iss = K.j2Rates(RADIUS.earth + 400e3, 0, 51.6 * d2r);
-  close(iss.raanDot * r2d * DAY, -5.0023, 1e-3);
+  close(iss.raanDotJ2 * r2d * DAY, -5.0023, 1e-3);
   close(iss.nodalPeriod, 5549.29, 1e-5);
   close(iss.anomalisticPeriod, 5553.0, 1e-4);
   close(iss.revsPerNodalDay, 15.3148, 1e-4);
@@ -88,6 +88,9 @@ test("J2 secular rates, sun-synchronous and repeat ground tracks", () => {
   close(K.sunSyncInclination(RADIUS.earth + 1000e3) * r2d, 99.479, 3e-4);
   assert.ok(Number.isNaN(K.sunSyncInclination(RADIUS.earth + 7000e3)));
   close(K.sunSyncSemiMajorAxis(K.sunSyncInclination(RADIUS.earth + 800e3)), RADIUS.earth + 800e3, 1e-9);
+  // Verify J3/J4 zonal harmonic rates
+  assert.ok(typeof iss.raanDotJ4 === "number" && typeof iss.argpDotJ4 === "number");
+  assert.ok(typeof iss.eJ3Amplitude === "number");
   // Round trip: the RAAN rate at the SSO inclination equals the target.
   close(K.j2Rates(RADIUS.earth + 800e3, 0, K.sunSyncInclination(RADIUS.earth + 800e3)).raanDot, K.SUN_SYNC_RATE, 1e-9);
   // GEO node rate and the Mars scaling check.
