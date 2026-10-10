@@ -20,11 +20,11 @@ export const TROPICAL_YEAR = 365.2422 * DAY;
 /** RAAN rate a sun-synchronous orbit must hold, rad/s (+0.98565 deg/day). */
 export const SUN_SYNC_RATE = (2 * Math.PI) / TROPICAL_YEAR;
 
-/** Zonal J2 with the reference radius of the gravity model that defines it. */
+/** Zonal gravity coefficients (J2, J3, J4) with the reference radius of the model that defines it. */
 export const J2_BODIES = {
-  earth: { j2: 1.08262668e-3, radius: 6378137, mu: MU.earth },
-  moon: { j2: 2.033e-4, radius: 1738.0e3, mu: MU.moon },
-  mars: { j2: 1.9555e-3, radius: 3396.0e3, mu: MU.mars },
+  earth: { j2: 1.08262668e-3, j3: -2.53241e-6, j4: -1.61989e-6, radius: 6378137, mu: MU.earth },
+  moon: { j2: 2.033e-4, j3: 8.7e-6, j4: -1.3e-5, radius: 1738.0e3, mu: MU.moon },
+  mars: { j2: 1.9555e-3, j3: 3.14e-5, j4: -1.54e-5, radius: 3396.0e3, mu: MU.mars },
 } as const;
 export type J2Body = keyof typeof J2_BODIES;
 
@@ -187,10 +187,17 @@ export function reboostCycle(hHi: number, dh: number, beta: number, activity: So
 // ---- J2 secular effects ---------------------------------------------------------
 
 export interface J2Rates {
-  /** Secular rates, rad/s. */
+  /** Secular rates, rad/s. Includes J2 + J4 secular terms. */
   raanDot: number;
   argpDot: number;
   meanAnomalyDot: number;
+  raanDotJ2: number;
+  argpDotJ2: number;
+  /** J4 secular contributions to RAAN and argument of perigee rates, rad/s. */
+  raanDotJ4: number;
+  argpDotJ4: number;
+  /** Peak amplitude of J3 long-period eccentricity oscillations (Vallado Eq. 9-33). */
+  eJ3Amplitude: number;
   keplerPeriod: number;
   nodalPeriod: number;
   anomalisticPeriod: number;
@@ -199,19 +206,39 @@ export interface J2Rates {
 }
 
 export function j2Rates(a: number, e: number, i: number, body: J2Body = "earth"): J2Rates {
-  const { j2, radius, mu } = J2_BODIES[body];
+  const { j2, j3, j4, radius, mu } = J2_BODIES[body];
   if (!(a > 0) || !(e >= 0 && e < 1)) throw new Error("j2Rates: need a > 0 and 0 <= e < 1");
   if (a * (1 - e) <= radius) throw new Error("j2Rates: periapsis is below the surface");
   const p = a * (1 - e * e);
   const n = Math.sqrt(mu / a ** 3);
-  const k = 1.5 * n * j2 * (radius / p) ** 2;
+  const k2 = 1.5 * n * j2 * (radius / p) ** 2;
   const s2 = Math.sin(i) ** 2;
-  const raanDot = -k * Math.cos(i);
-  const argpDot = k * (2 - 2.5 * s2);
-  const meanAnomalyDot = k * Math.sqrt(1 - e * e) * (1 - 1.5 * s2);
+  const c2 = Math.cos(i) ** 2;
+  const ci = Math.cos(i);
+
+  // J2 secular rates
+  const raanDotJ2 = -k2 * ci;
+  const argpDotJ2 = k2 * (2 - 2.5 * s2);
+  const meanAnomalyDotJ2 = k2 * Math.sqrt(1 - e * e) * (1 - 1.5 * s2);
+
+  // J4 secular rates (Vallado / EGM96 zonal perturbations)
+  const k4 = (15 / 32) * n * j4 * (radius / p) ** 4;
+  const raanDotJ4 = k4 * ci * (12 - 14 * s2) * (1 + 1.5 * e * e);
+  const argpDotJ4 = -k4 * (12 - 60 * s2 + 35 * s2 * s2 + e * e * (16.5 - 70 * s2 + 52.5 * s2 * s2));
+
+  const raanDot = raanDotJ2 + raanDotJ4;
+  const argpDot = argpDotJ2 + argpDotJ4;
+  const meanAnomalyDot = meanAnomalyDotJ2;
+
+  // J3 long-period eccentricity amplitude (Vallado Eq. 9-33)
+  const sinI = Math.sin(i);
+  const denom = 2 * j2 * (radius / p) * (1 - 1.25 * s2);
+  const eJ3Amplitude = Math.abs(denom) > 1e-12 ? Math.abs((j3 / (2 * j2)) * (radius / p) * sinI * (1 - 1.25 * s2) / (1 - 1.25 * s2)) : 0;
+
   const omega = body === "earth" ? OMEGA_EARTH : NaN;
   return {
     raanDot, argpDot, meanAnomalyDot,
+    raanDotJ2, argpDotJ2, raanDotJ4, argpDotJ4, eJ3Amplitude,
     keplerPeriod: (2 * Math.PI) / n,
     nodalPeriod: (2 * Math.PI) / (n + meanAnomalyDot + argpDot),
     anomalisticPeriod: (2 * Math.PI) / (n + meanAnomalyDot),
