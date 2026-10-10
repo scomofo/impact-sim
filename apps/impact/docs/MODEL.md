@@ -46,6 +46,19 @@ Color/severity levels are energy bands used to drive cinematic effects. They do 
 
 The [post-impact scientific audit](POST_IMPACT.md) distinguishes supported primary estimates from missing aftermath models and documents research through July 2026. The rendering correction removes automatic global dust/dimming, invented secondary/antipodal explosions and unconditional giant-impact lava/atmosphere-loss effects. Primary thermal exposure is now a stationary, un-enlarged highlight rather than a sweeping ignition front. The timeline explicitly labels animation seconds; exports identify missing aftermath predictions as `not-calculated`. The numerical model remains 0.2.0: these changes correct visual implications, not validate new physical equations.
 
+## Key Realism & Physical Accuracy Gaps
+
+While this analytical tool reproduces published check points (such as Collins et al. 2005 Table 6), users and researchers should note the explicit physical omissions relative to full numerical simulations:
+
+1. **Atmospheric Fragmentation & Entry Dynamics:**
+   - Does not model hydrodynamic pancake breakup, progressive fragment cloud dispersion, or trajectory-resolved ablation/mass loss during entry.
+2. **Thermal Radiation & Atmospheric Coupling:**
+   - Uses geometric fireball visibility and atmospheric transmissivity approximations rather than full 3D radiative transport, atmospheric opacity dynamics, or greenhouse/dust climate feedbacks.
+3. **Hydrodynamics & Marine/Coastal Effects:**
+   - Omits 3D fluid hydrodynamics, magnetohydrodynamics (MHD), wave dispersion, wave-breaking dynamics, bathymetry, shoreline reflections, and coastal inundation/run-up.
+4. **Gravity & Geoid Perturbations:**
+   - Gravity acceleration is simplified (monopole + $J_2$ / $J_{22}$ where applicable); higher-order geopotential harmonics ($J_3, J_4, C_{nm}, S_{nm}$) and mass distribution variations are omitted.
+
 ## Verification and remaining limits
 
 Run `npm ci`, `npm run check`, and `npm test` with Node 22.22.2+ or 24.15.0+ (supported LTS versions). The browser app itself has no npm/runtime dependency or build step; jsdom is for tests only.

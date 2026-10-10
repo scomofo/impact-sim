@@ -99,6 +99,7 @@ export function createAssessmentReport(inputs, distance, { event = null, created
       nullValues: 'Not calculated or outside model scope, not a zero effect.',
       tsunami: 'Amplitude above still water; not crest-to-trough wave height or coastal run-up.',
       animation: 'Playback seconds are not elapsed physical time. Wave geometry, particles and giant outcomes are schematic; the thermal highlight is a primary exposure extent, not a wildfire perimeter.',
+      physicalGaps: 'Analytical approximation omitting hydrodynamic fragmentation/pancaking, 3D radiation transport, 3D/MHD hydrodynamics, bathymetry/wave run-up, and higher-order gravity field harmonics.',
       postImpact: {
         atmosphericTransport: 'not-calculated', aerosolLoading: 'not-calculated',
         climateResponse: 'not-calculated', ejectaReentryHeating: 'not-calculated',
