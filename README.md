@@ -136,3 +136,18 @@ GitHub Actions runs all three for pushes and pull requests.
 - `apps/impact` is the original [impact-sim](https://github.com/scomofo/impact-sim) app, moved unchanged into the workspace. See its [README](apps/impact/README.md), [model methods](apps/impact/docs/MODEL.md) and [catalog provenance](apps/impact/docs/CATALOG.md).
 - `apps/libration`, `apps/helios` and `apps/stackyard` carry the simulation code from the [Apoapsis](https://github.com/scomofo/Apoapsis), [Helios](https://github.com/scomofo/Helios) and [Stackyard](https://github.com/scomofo/Stackyard) repositories. Those repositories were generated inside an app-builder sandbox and bundled a large auth/database/PWA scaffold that the simulations never used; only the simulation, HUD and styling sources were kept, each wrapped in a plain Vite + React entry point.
 - `packages/astrolab` follows the formulas in Curtis, *Orbital Mechanics for Engineering Students*; Bate, Mueller & White; Hairer, Nørsett & Wanner (Dormand–Prince); Collins, Melosh & Marcus (2005) for impact scaling; Vallado for the exponential atmosphere, J2 and third-body rates; Wertz & Larson (SMAD) for drag per revolution; and Soop, *Handbook of Geostationary Orbits*, for GEO control cycles. Tests reproduce worked examples and published check values from those sources.
+
+## Realism & Physical Accuracy Gap
+
+The models and tools across Orbital Suite are **analytical approximations and simplified numerical solvers** intended for rapid trade studies, education, and analytical reference checks. They contain known physical simplifications and accuracy gaps relative to high-fidelity numerical simulations:
+
+- **Impact & Atmospheric Entry (`apps/impact`, `packages/astrolab`):**
+  - **Atmospheric fragmentation:** Omits pancaking, debris dispersion, trajectory-resolved ablation, and hydrodynamic pancake breakup models (e.g., Hills-Goddeau / Chypa models).
+  - **3D Radiation Transport & Thermal:** Uses simplified fireball surface/horizon geometric radiation scaling rather than 3D radiative transfer or atmospheric opacity dynamics.
+  - **Hydrodynamics & Marine Effects:** Omits 3D hydrodynamics, magnetohydrodynamics (MHD), wave breaking, dispersion, complex bathymetry, shoreline interactions, and coastal inundation/run-up.
+  - **Giant Impacts:** Uses simplified energy/mass partitioning criteria (Leinhardt & Stewart, Genda et al.) rather than 3D smoothed particle hydrodynamics (SPH) or Eulerian hydrocodes.
+
+- **Orbital Mechanics & Maintenance (`packages/astrolab`, `apps/lab`, `apps/helios`, `apps/libration`):**
+  - **Gravity Models:** Models spherical Earth and dominant $J_2$ zonal / $J_{22}$ tesseral perturbations. High-order spherical harmonics ($J_3, J_4, C_{nm}, S_{nm}$ gravity field series like EGM96/GGM05) are omitted.
+  - **Atmosphere & Drag:** Exponential atmosphere model (Vallado) with solar-activity scaling factors; does not include real-time geomagnetic storm dynamics or dynamic thermospheric models (NRLMSISE-00 / JB2008).
+  - **Spacecraft Dynamics:** Assumes point-mass rigid-body dynamics for orbit propagation without attitude/torque coupling or flexible-body dynamics.
